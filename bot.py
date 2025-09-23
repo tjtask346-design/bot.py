@@ -2,9 +2,36 @@ import logging
 import re
 import os
 import asyncio
+from flask import Flask, request
+import threading
+import time
+import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import yt_dlp
+
+# Flask app তৈরি করো
+app = Flask(__name__)
+
+# Keep alive function
+def keep_alive():
+    while True:
+        try:
+            requests.get("https://your-bot-name.onrender.com/")
+            time.sleep(300)  # 5 minutes
+        except:
+            pass
+
+# Server start হলে auto ping চালু করুন
+@app.before_first_request
+def activate_keep_alive():
+    thread = threading.Thread(target=keep_alive)
+    thread.daemon = True
+    thread.start()
+
+@app.route('/')
+def home():
+    return "Bot is running!"
 
 # লগিং সেটআপ
 logging.basicConfig(
@@ -114,7 +141,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     3. Instagram: https://www.instagram.com/p/POST_ID/ or https://www.instagram.com/reel/REEL_ID/
     4. X (Twitter): https://twitter.com/username/status/TWEET_ID or https://x.com/username/status/TWEET_ID
 
-    শুধু একটি ভিডিও লিঙ্ক পাঠান এবং আমি আপনাকে ডাউনলোড অপশন দেব!
+    শুধু একটি ভিডিও লিঙ্ক পাঠান এবং আমি আপনাকে डाउनलोड অপশন দেব!
     """
     await update.message.reply_text(help_text)
 
@@ -273,7 +300,7 @@ async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_T
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """কনভারসেশন ক্যান্সেল করুন"""
     await update.message.reply_text(
-        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন।',
+        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন。',
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
@@ -363,6 +390,15 @@ def main():
     application.add_handler(conv_handler)
 
     print("বট চলছে...")
+    
+    # Flask server এবং Telegram bot একসাথে চালাও
+    def run_flask():
+        app.run(host='0.0.0.0', port=10000, debug=False, use_reloader=False)
+    
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
     application.run_polling()
 
 if __name__ == '__main__':
