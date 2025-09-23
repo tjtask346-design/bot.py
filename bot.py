@@ -63,100 +63,147 @@ URL_KEY = 'url'
 TITLE_KEY = 'title'
 PLATFORM_KEY = 'platform'
 
-# YouTube Download Strategies
+# YouTube API Configuration
 class YouTubeDownloader:
     def __init__(self):
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0'
-        ]
-    
+        # আপনার YouTube API Key - এখানে বসান
+        self.api_key = "AIzaSyB0wPvv25ijpmAiOsfQkmPnAOwEqS_x5_c"
+        
     async def download_youtube_video(self, url, format_string, resolution, update, context):
-        """Multi-strategy YouTube download approach"""
-        
-        strategies = [
-            self._strategy_basic,
-            self._strategy_alternative, 
-            self._strategy_fallback
+        """YouTube API দিয়ে verified download"""
+        try:
+            # 1. First verify video using YouTube API
+            video_id = self.extract_video_id(url)
+            if not video_id:
+                return False, "Invalid YouTube URL format"
+            
+            # Verify video exists via API
+            verification_result = await self.verify_video_with_api(video_id)
+            if not verification_result["success"]:
+                return False, verification_result["message"]
+            
+            # 2. Download with optimized yt-dlp settings
+            ydl_opts = self.get_ydl_opts(format_string, resolution, url, update, context)
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                title = info.get('title', 'YouTube ভিডিও')
+                return True, (filename, title, 'video')
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"YouTube download error: {error_msg}")
+            
+            # Specific error handling
+            if "Sign in to confirm you're not a bot" in error_msg:
+                # Fallback to API-only method
+                return await self.download_via_api_fallback(video_id, resolution, update, context)
+            else:
+                return False, error_msg
+    
+    def extract_video_id(self, url):
+        """YouTube URL থেকে video ID extract করুন"""
+        patterns = [
+            r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([^&=%\?]{11})',
+            r'youtube\.com/watch\?.*v=([^&]{11})',
+            r'youtu\.be/([^?]{11})'
         ]
         
-        for i, strategy in enumerate(strategies, 1):
-            try:
-                logger.info(f"Trying YouTube strategy {i} for chat {update.effective_chat.id}")
-                result = await strategy(url, format_string, resolution, update, context)
-                logger.info(f"YouTube strategy {i} successful!")
-                return True, result
-            except Exception as e:
-                logger.error(f"YouTube strategy {i} failed: {str(e)}")
-                if i == len(strategies):  # Last strategy failed
-                    return False, str(e)
-                await asyncio.sleep(1)  # Small delay between retries
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
     
-    async def _strategy_basic(self, url, format_string, resolution, update, context):
-        """Basic download with random user agent"""
-        ydl_opts = {
-            'format': format_string,
-            'outtmpl': f'YouTube_%(title)s.%(ext)s',
-            'user_agent': random.choice(self.user_agents),
+    async def verify_video_with_api(self, video_id):
+        """YouTube API দিয়ে ভিডিও verify করুন"""
+        api_url = "https://www.googleapis.com/youtube/v3/videos"
+        params = {
+            'part': 'snippet,contentDetails,status',
+            'id': video_id,
+            'key': self.api_key
+        }
+        
+        try:
+            response = requests.get(api_url, params=params, timeout=10)
+            data = response.json()
+            
+            if 'error' in data:
+                return {"success": False, "message": f"API Error: {data['error']['message']}"}
+            
+            if 'items' in data and len(data['items']) > 0:
+                video_info = data['items'][0]
+                status = video_info.get('status', {})
+                
+                # Check if video is available
+                if status.get('privacyStatus') == 'private':
+                    return {"success": False, "message": "This video is private"}
+                if status.get('uploadStatus') != 'processed':
+                    return {"success": False, "message": "Video not available"}
+                
+                return {"success": True, "message": "Video verified successfully"}
+            else:
+                return {"success": False, "message": "Video not found on YouTube"}
+                
+        except Exception as e:
+            logger.error(f"YouTube API verification error: {e}")
+            return {"success": False, "message": "YouTube API temporary unavailable"}
+    
+    def get_ydl_opts(self, format_string, resolution, url, update, context):
+        """Optimized yt-dlp options"""
+        # Quality mapping with fallbacks
+        quality_map = {
+            '1080p': 'best[height<=1080]/best[height<=720]',
+            '720p': 'best[height<=720]/best[height<=480]',
+            '480p': 'best[height<=480]/best[height<=360]',
+            '360p': 'best[height<=360]/worst[height>=240]'
+        }
+        
+        actual_format = quality_map.get(resolution, 'best[height<=720]')
+        
+        return {
+            'format': actual_format,
+            'outtmpl': 'YouTube_%(title).100s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'skip': ['dash', 'hls']
+                }
+            },
             'http_headers': {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36',
+                'Accept': '*/*',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Connection': 'keep-alive',
+                'Referer': 'https://www.youtube.com/',
             },
             'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
         }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title = info.get('title', 'YouTube ভিডিও')
-            return (filename, title, 'video')
     
-    async def _strategy_alternative(self, url, format_string, resolution, update, context):
-        """Alternative approach with different settings"""
-        # Lower quality fallback
-        if '1080' in format_string:
-            fallback_format = 'best[height<=720]'
-        else:
-            fallback_format = 'worst[height>=360]/best[height<=480]'
+    async def download_via_api_fallback(self, video_id, resolution, update, context):
+        """API verification passed but download failed - try alternative"""
+        try:
+            # Get video info via API for better error handling
+            api_url = "https://www.googleapis.com/youtube/v3/videos"
+            params = {
+                'part': 'snippet',
+                'id': video_id,
+                'key': self.api_key
+            }
             
-        ydl_opts = {
-            'format': fallback_format,
-            'outtmpl': f'YouTube_%(title)s.%(ext)s',
-            'user_agent': random.choice(self.user_agents),
-            'extractor_args': {'youtube': {'skip': ['dash']}},
-            'quiet': True,
-            'no_warnings': True,
-            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title = info.get('title', 'YouTube ভিডিও')
-            return (filename, title, 'video')
-    
-    async def _strategy_fallback(self, url, format_string, resolution, update, context):
-        """Fallback strategy as last resort"""
-        ydl_opts = {
-            'format': 'best[height<=480]',  # Force lower quality
-            'outtmpl': f'YouTube_%(title)s.%(ext)s',
-            'user_agent': random.choice(self.user_agents),
-            'ignoreerrors': True,
-            'quiet': True,
-            'geo_bypass': True,
-            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title = info.get('title', 'YouTube ভিডিও')
-            return (filename, title, 'video')
+            response = requests.get(api_url, params=params)
+            data = response.json()
+            
+            if 'items' in data and data['items']:
+                title = data['items'][0]['snippet']['title']
+                return False, f"Video available but download temporary blocked: {title}"
+            else:
+                return False, "Download failed. Please try again later."
+                
+        except Exception as e:
+            return False, "Temporary download issue. Please try again."
 
 # Initialize YouTube downloader
 youtube_downloader = YouTubeDownloader()
@@ -218,7 +265,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     🎉 স্বাগতম! আমি একটি ভিডিও ডাউনলোডার বট।
 
     আমি নিম্নলিখিত প্ল্যাটফর্ম থেকে ভিডিও ডাউনলোড করতে পারি:
-    • YouTube
+    • YouTube (API Verified)
     • TikTok
     • Instagram
     • X (Twitter)
@@ -336,20 +383,20 @@ async def select_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     platform = context.user_data[PLATFORM_KEY]
     
     resolution_map = {
-        '360p': 'best[height<=360]',
-        '480p': 'best[height<=480]', 
-        '720p': 'best[height<=720]',
-        '1080p': 'best[height<=1080]'
+        '360p': '360p',
+        '480p': '480p', 
+        '720p': '720p',
+        '1080p': '1080p'
     }
     
-    format_string = resolution_map.get(resolution_choice, 'best[height<=720]')
+    resolution = resolution_map.get(resolution_choice, '720p')
     
     await update.message.reply_text(f"🔍 {resolution_choice} রেজোলিউশনে {platform} ভিডিও ডাউনলোড করা হচ্ছে...", reply_markup=ReplyKeyboardRemove())
     
     if platform == "YouTube":
-        success, result = await youtube_downloader.download_youtube_video(url, format_string, resolution_choice, update, context)
+        success, result = await youtube_downloader.download_youtube_video(url, resolution, resolution_choice, update, context)
     else:
-        success, result = await download_other_video(url, platform, format_string, resolution_choice, update, context)
+        success, result = await download_other_video(url, platform, resolution, resolution_choice, update, context)
     
     await handle_download_result(update, context, success, result, platform)
     return ConversationHandler.END
@@ -359,7 +406,7 @@ async def download_other_video(url, platform, format_string, resolution, update,
     try:
         ydl_opts = {
             'format': 'best',
-            'outtmpl': f'{platform}_%(title)s.%(ext)s',
+            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
             'quiet': True,
             'progress_hooks': [TelegramProgressHook(update, context, url, platform, resolution).hook],
         }
@@ -384,7 +431,7 @@ async def download_audio(url, platform, update, context):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'outtmpl': f'{platform}_%(title)s.%(ext)s',
+            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
             'quiet': True,
             'progress_hooks': [TelegramProgressHook(update, context, url, platform).hook],
         }
@@ -416,10 +463,10 @@ async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_T
                 
                 if file_type == 'audio':
                     with open(filename, 'rb') as audio_file:
-                        await update.message.reply_audio(audio=audio_file, title=title)
+                        await update.message.reply_audio(audio=audio_file, title=title[:64], performer="YouTube Downloader")
                 else:
                     with open(filename, 'rb') as video_file:
-                        await update.message.reply_video(video=video_file, caption=title)
+                        await update.message.reply_video(video=video_file, caption=title[:1024])
                         
                 await update.message.reply_text("🎉 সফলভাবে ডাউনলোড হয়েছে!")
                 
@@ -474,7 +521,7 @@ def main():
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(conv_handler)
 
-    print("বট চলছে...")
+    print("বট চলছে... YouTube API Integrated!")
     
     def run_flask():
         app.run(host='0.0.0.0', port=10000, debug=False, use_reloader=False)
