@@ -9,6 +9,7 @@ import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import yt_dlp
+import random
 
 # Flask app তৈরি করো
 app = Flask(__name__)
@@ -62,6 +63,104 @@ URL_KEY = 'url'
 TITLE_KEY = 'title'
 PLATFORM_KEY = 'platform'
 
+# YouTube Download Strategies
+class YouTubeDownloader:
+    def __init__(self):
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0'
+        ]
+    
+    async def download_youtube_video(self, url, format_string, resolution, update, context):
+        """Multi-strategy YouTube download approach"""
+        
+        strategies = [
+            self._strategy_basic,
+            self._strategy_alternative, 
+            self._strategy_fallback
+        ]
+        
+        for i, strategy in enumerate(strategies, 1):
+            try:
+                logger.info(f"Trying YouTube strategy {i} for chat {update.effective_chat.id}")
+                result = await strategy(url, format_string, resolution, update, context)
+                logger.info(f"YouTube strategy {i} successful!")
+                return True, result
+            except Exception as e:
+                logger.error(f"YouTube strategy {i} failed: {str(e)}")
+                if i == len(strategies):  # Last strategy failed
+                    return False, str(e)
+                await asyncio.sleep(1)  # Small delay between retries
+    
+    async def _strategy_basic(self, url, format_string, resolution, update, context):
+        """Basic download with random user agent"""
+        ydl_opts = {
+            'format': format_string,
+            'outtmpl': f'YouTube_%(title)s.%(ext)s',
+            'user_agent': random.choice(self.user_agents),
+            'quiet': True,
+            'no_warnings': True,
+            'http_headers': {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive',
+            },
+            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            title = info.get('title', 'YouTube ভিডিও')
+            return (filename, title, 'video')
+    
+    async def _strategy_alternative(self, url, format_string, resolution, update, context):
+        """Alternative approach with different settings"""
+        # Lower quality fallback
+        if '1080' in format_string:
+            fallback_format = 'best[height<=720]'
+        else:
+            fallback_format = 'worst[height>=360]/best[height<=480]'
+            
+        ydl_opts = {
+            'format': fallback_format,
+            'outtmpl': f'YouTube_%(title)s.%(ext)s',
+            'user_agent': random.choice(self.user_agents),
+            'extractor_args': {'youtube': {'skip': ['dash']}},
+            'quiet': True,
+            'no_warnings': True,
+            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            title = info.get('title', 'YouTube ভিডিও')
+            return (filename, title, 'video')
+    
+    async def _strategy_fallback(self, url, format_string, resolution, update, context):
+        """Fallback strategy as last resort"""
+        ydl_opts = {
+            'format': 'best[height<=480]',  # Force lower quality
+            'outtmpl': f'YouTube_%(title)s.%(ext)s',
+            'user_agent': random.choice(self.user_agents),
+            'ignoreerrors': True,
+            'quiet': True,
+            'geo_bypass': True,
+            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            title = info.get('title', 'YouTube ভিডিও')
+            return (filename, title, 'video')
+
+# Initialize YouTube downloader
+youtube_downloader = YouTubeDownloader()
+
 class TelegramProgressHook:
     def __init__(self, update, context, url, platform, resolution=None):
         self.update = update
@@ -74,7 +173,6 @@ class TelegramProgressHook:
         
     def hook(self, d):
         if d['status'] == 'downloading' and not self.progress_message_sent:
-            # শুধু একবার মেসেজ দেখাবে
             asyncio.create_task(self.show_progress_message())
             self.progress_message_sent = True
                     
@@ -82,7 +180,7 @@ class TelegramProgressHook:
             asyncio.create_task(self.delete_progress_message())
     
     async def show_progress_message(self):
-        """ডাউনলোড শুরু হলে মেসেজ দেখান (শুধু একবার)"""
+        """ডাউনলোড শুরু হলে মেসেজ দেখান"""
         try:
             if self.platform == "YouTube" and self.resolution:
                 progress_text = f"🔍 {self.resolution} রেজোলিউশনে YouTube ভিডিও ডাউনলোড করা হচ্ছে..."
@@ -128,8 +226,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     শুধু ভিডিওর লিঙ্কটি এখানে পেস্ট করুন!
     """
     await update.message.reply_text(welcome_text)
-
-    # গ্রুপ মেসেজ পাঠানো
     await update.message.reply_text(GROUP_MESSAGE)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,8 +242,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     শুধু একটি ভিডিও লিঙ্ক পাঠান এবং আমি আপনাকে ডাউনলোড অপশন দেব!
     """
     await update.message.reply_text(help_text)
-
-    # গ্রুプ মেসেজ পাঠানো
     await update.message.reply_text(GROUP_MESSAGE)
 
 def is_youtube_url(url):
@@ -164,7 +258,6 @@ def is_twitter_url(url):
 
 def is_tiktok_url(url):
     """URL টি TikTok এর কিনা চেক করুন"""
-    # TikTok এর বিভিন্ন ফরম্যাট সাপোর্ট করা
     tiktok_patterns = [
         r'https?://(www\.)?tiktok\.com/([a-zA-Z0-9._-]+)/video/(\d+)',
         r'https?://(www\.)?tiktok\.com/@[a-zA-Z0-9._-]+/video/\d+',
@@ -193,7 +286,7 @@ def get_platform_name(url):
         return "Unknown"
 
 async def handle_video_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ভিডিও URL হ্যান্ডেল করুন এবং ফরম্যাট সিলেক্ট করার অপশন দিন"""
+    """ভিডিও URL হ্যান্ডেল করুন"""
     url = update.message.text
     platform = get_platform_name(url)
     
@@ -205,7 +298,6 @@ async def handle_video_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[URL_KEY] = url
     context.user_data[PLATFORM_KEY] = platform
 
-    # সব প্ল্যাটফর্মের জন্য ভিডিও/অডিও অপশন দিন
     keyboard = [['ভিডিও', 'অডিও']]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
@@ -222,14 +314,12 @@ async def select_format(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = context.user_data[URL_KEY]
 
     if format_choice == 'অডিও':
-        # সব প্ল্যাটফর্মের জন্য অডিও ডাউনলোড
         await update.message.reply_text(f"🔍 {platform} থেকে অডিও ডাউনলোড করা হচ্ছে...", reply_markup=ReplyKeyboardRemove())
         success, result = await download_audio(url, platform, update, context)
         await handle_download_result(update, context, success, result, platform)
         return ConversationHandler.END
 
     elif format_choice == 'ভিডিও':
-        # রেজোলিউশন সিলেক্ট করার অপশন দিন (সব প্ল্যাটফর্মের জন্য)
         keyboard = [['360p', '480p'], ['720p', '1080p']]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
 
@@ -255,76 +345,24 @@ async def select_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     format_string = resolution_map.get(resolution_choice, 'best[height<=720]')
     
     await update.message.reply_text(f"🔍 {resolution_choice} রেজোলিউশনে {platform} ভিডিও ডাউনলোড করা হচ্ছে...", reply_markup=ReplyKeyboardRemove())
-    success, result = await download_video(url, platform, format_string, resolution_choice, update, context)
+    
+    if platform == "YouTube":
+        success, result = await youtube_downloader.download_youtube_video(url, format_string, resolution_choice, update, context)
+    else:
+        success, result = await download_other_video(url, platform, format_string, resolution_choice, update, context)
+    
     await handle_download_result(update, context, success, result, platform)
     return ConversationHandler.END
 
-async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_TYPE, success: bool, result, platform: str):
-    """ডাউনলোড রেজাল্ট হ্যান্ডেল করুন"""
-    if success:
-        filename, title, file_type = result
-        
-        try:
-            # ফাইল সাইজ চেক করুন
-            file_size = os.path.getsize(filename)
-            max_size = 50 * 1024 * 1024  # 50MB
-            
-            if file_size > max_size:
-                await update.message.reply_text("❌ ফাইলটি খুব বড় (50MB এর বেশি)। টেলিগ্রামে আপলোড করা সম্ভব নয়।")
-            else:
-                await update.message.reply_text("✅ ডাউনলোড সম্পন্ন! এখন আপলোড করা হচ্ছে...")
-                
-                if file_type == 'audio':
-                    with open(filename, 'rb') as audio_file:
-                        await update.message.reply_audio(audio=audio_file, title=title)
-                else:
-                    with open(filename, 'rb') as video_file:
-                        await update.message.reply_video(video=video_file, caption=title)
-                        
-                await update.message.reply_text("🎉 সফলভাবে ডাউনলোড হয়েছে!")
-                
-        except Exception as e:
-            logger.error(f"ফাইল আপলোড ত্রুটি: {e}")
-            await update.message.reply_text("❌ আপলোড করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন。")
-        
-        # ফাইল ডিলিট করুন
-        try:
-            os.remove(filename)
-        except Exception as e:
-            logger.error(f"ফাইল ডিলিট ত্রুটি: {e}")
-    else:
-        error_msg = result
-        await update.message.reply_text(f"❌ {platform} ডাউনলোড করতে ব্যর্থ হয়েছে: {error_msg}")
-
-    # গ্রুপ মেসেজ পাঠানো
-    await update.message.reply_text(GROUP_MESSAGE)
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """কনভারসেশন ক্যান্সেল করুন"""
-    await update.message.reply_text(
-        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন।',
-        reply_markup=ReplyKeyboardRemove()
-    )
-    return ConversationHandler.END
-
-async def download_video(url, platform, format_string, resolution, update, context):
-    """ভিডিও ডাউনলোড করুন"""
+async def download_other_video(url, platform, format_string, resolution, update, context):
+    """Instagram, Twitter, TikTok এর জন্য ভিডিও ডাউনলোড"""
     try:
-        if platform == "YouTube":
-            ydl_opts = {
-                'format': format_string,
-                'outtmpl': f'{platform}_%(title)s.%(ext)s',
-                'quiet': True,
-                'progress_hooks': [TelegramProgressHook(update, context, url, platform, resolution).hook],
-            }
-        else:
-            # Instagram, Twitter, TikTok এর জন্য best format ব্যবহার করুন
-            ydl_opts = {
-                'format': 'best',
-                'outtmpl': f'{platform}_%(title)s.%(ext)s',
-                'quiet': True,
-                'progress_hooks': [TelegramProgressHook(update, context, url, platform, resolution).hook],
-            }
+        ydl_opts = {
+            'format': 'best',
+            'outtmpl': f'{platform}_%(title)s.%(ext)s',
+            'quiet': True,
+            'progress_hooks': [TelegramProgressHook(update, context, url, platform, resolution).hook],
+        }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -362,6 +400,51 @@ async def download_audio(url, platform, update, context):
         logger.error(f"{platform} অডিও ডাউনলোড ত্রুটি: {e}")
         return False, str(e)
 
+async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_TYPE, success: bool, result, platform: str):
+    """ডাউনলোড রেজাল্ট হ্যান্ডেল করুন"""
+    if success:
+        filename, title, file_type = result
+        
+        try:
+            file_size = os.path.getsize(filename)
+            max_size = 50 * 1024 * 1024  # 50MB
+            
+            if file_size > max_size:
+                await update.message.reply_text("❌ ফাইলটি খুব বড় (50MB এর বেশি)। টেলিগ্রামে আপলোড করা সম্ভব নয়।")
+            else:
+                await update.message.reply_text("✅ ডাউনলোড সম্পন্ন! এখন আপলোড করা হচ্ছে...")
+                
+                if file_type == 'audio':
+                    with open(filename, 'rb') as audio_file:
+                        await update.message.reply_audio(audio=audio_file, title=title)
+                else:
+                    with open(filename, 'rb') as video_file:
+                        await update.message.reply_video(video=video_file, caption=title)
+                        
+                await update.message.reply_text("🎉 সফলভাবে ডাউনলোড হয়েছে!")
+                
+        except Exception as e:
+            logger.error(f"ফাইল আপলোড ত্রুটি: {e}")
+            await update.message.reply_text("❌ আপলোড করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন。")
+        
+        try:
+            os.remove(filename)
+        except Exception as e:
+            logger.error(f"ফাইল ডিলিট ত্রুটি: {e}")
+    else:
+        error_msg = result
+        await update.message.reply_text(f"❌ {platform} ডাউনলোড করতে ব্যর্থ হয়েছে: {error_msg}")
+
+    await update.message.reply_text(GROUP_MESSAGE)
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """কনভারসেশন ক্যান্সেল করুন"""
+    await update.message.reply_text(
+        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন।',
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ইনকামিং মেসেজ হ্যান্ডেল করুন"""
     user_message = update.message.text
@@ -393,7 +476,6 @@ def main():
 
     print("বট চলছে...")
     
-    # Flask server এবং Telegram bot একসাথে চালাও
     def run_flask():
         app.run(host='0.0.0.0', port=10000, debug=False, use_reloader=False)
     
