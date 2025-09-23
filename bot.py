@@ -22,12 +22,14 @@ def keep_alive():
         except:
             pass
 
-# Server start হলে auto ping চালু করুন
-@app.before_first_request
-def activate_keep_alive():
-    thread = threading.Thread(target=keep_alive)
-    thread.daemon = True
-    thread.start()
+# Flask app start হলে auto ping চালু করুন
+@app.before_request
+def before_first_request():
+    if not hasattr(app, 'keep_alive_started'):
+        app.keep_alive_started = True
+        thread = threading.Thread(target=keep_alive)
+        thread.daemon = True
+        thread.start()
 
 @app.route('/')
 def home():
@@ -141,11 +143,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     3. Instagram: https://www.instagram.com/p/POST_ID/ or https://www.instagram.com/reel/REEL_ID/
     4. X (Twitter): https://twitter.com/username/status/TWEET_ID or https://x.com/username/status/TWEET_ID
 
-    শুধু একটি ভিডিও লিঙ্ক পাঠান এবং আমি আপনাকে डाउनलोड অপশন দেব!
+    শুধু একটি ভিডিও লিঙ্ক পাঠান এবং আমি আপনাকে ডাউনলোড অপশন দেব!
     """
     await update.message.reply_text(help_text)
 
-    # গ্রুপ মেসেজ পাঠানো
+    # গ্রুプ মেসেজ পাঠানো
     await update.message.reply_text(GROUP_MESSAGE)
 
 def is_youtube_url(url):
@@ -300,7 +302,7 @@ async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_T
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """কনভারসেশন ক্যান্সেল করুন"""
     await update.message.reply_text(
-        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন。',
+        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন।',
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
