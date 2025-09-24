@@ -14,11 +14,11 @@ import random
 # Flask app তৈরি করো
 app = Flask(__name__)
 
-# Keep alive function
+# Keep alive function - আপনার URL দিয়ে update করুন
 def keep_alive():
     while True:
         try:
-            requests.get("https://your-bot-name.onrender.com/")
+            requests.get("https://mraim777.onrender.com/")  # ✅ আপনার URL দিয়ে change করুন
             time.sleep(300)  # 5 minutes
         except:
             pass
@@ -63,27 +63,21 @@ URL_KEY = 'url'
 TITLE_KEY = 'title'
 PLATFORM_KEY = 'platform'
 
-# YouTube API Configuration
+# ✅ FIXED YouTube Downloader Class
 class YouTubeDownloader:
     def __init__(self):
-        # আপনার YouTube API Key - এখানে বসান
         self.api_key = "AIzaSyB0wPvv25ijpmAiOsfQkmPnAOwEqS_x5_c"
         
     async def download_youtube_video(self, url, format_string, resolution, update, context):
-        """YouTube API দিয়ে verified download"""
+        """YouTube video download with bot detection bypass"""
         try:
-            # 1. First verify video using YouTube API
+            # 1. Extract video ID
             video_id = self.extract_video_id(url)
             if not video_id:
                 return False, "Invalid YouTube URL format"
             
-            # Verify video exists via API
-            verification_result = await self.verify_video_with_api(video_id)
-            if not verification_result["success"]:
-                return False, verification_result["message"]
-            
-            # 2. Download with optimized yt-dlp settings
-            ydl_opts = self.get_ydl_opts(format_string, resolution, url, update, context)
+            # 2. Download with optimized settings
+            ydl_opts = self.get_optimized_ydl_opts(resolution)
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -95,10 +89,9 @@ class YouTubeDownloader:
             error_msg = str(e)
             logger.error(f"YouTube download error: {error_msg}")
             
-            # Specific error handling
+            # ✅ FIXED: Bot detection error handling
             if "Sign in to confirm you're not a bot" in error_msg:
-                # Fallback to API-only method
-                return await self.download_via_api_fallback(video_id, resolution, update, context)
+                return await self.try_alternative_method(url, resolution, update, context)
             else:
                 return False, error_msg
     
@@ -116,57 +109,25 @@ class YouTubeDownloader:
                 return match.group(1)
         return None
     
-    async def verify_video_with_api(self, video_id):
-        """YouTube API দিয়ে ভিডিও verify করুন"""
-        api_url = "https://www.googleapis.com/youtube/v3/videos"
-        params = {
-            'part': 'snippet,contentDetails,status',
-            'id': video_id,
-            'key': self.api_key
-        }
-        
-        try:
-            response = requests.get(api_url, params=params, timeout=10)
-            data = response.json()
-            
-            if 'error' in data:
-                return {"success": False, "message": f"API Error: {data['error']['message']}"}
-            
-            if 'items' in data and len(data['items']) > 0:
-                video_info = data['items'][0]
-                status = video_info.get('status', {})
-                
-                # Check if video is available
-                if status.get('privacyStatus') == 'private':
-                    return {"success": False, "message": "This video is private"}
-                if status.get('uploadStatus') != 'processed':
-                    return {"success": False, "message": "Video not available"}
-                
-                return {"success": True, "message": "Video verified successfully"}
-            else:
-                return {"success": False, "message": "Video not found on YouTube"}
-                
-        except Exception as e:
-            logger.error(f"YouTube API verification error: {e}")
-            return {"success": False, "message": "YouTube API temporary unavailable"}
-    
-    def get_ydl_opts(self, format_string, resolution, url, update, context):
-        """Optimized yt-dlp options"""
-        # Quality mapping with fallbacks
+    def get_optimized_ydl_opts(self, resolution):
+        """✅ OPTIMIZED yt-dlp options for bot detection bypass"""
         quality_map = {
-            '1080p': 'best[height<=1080]/best[height<=720]',
-            '720p': 'best[height<=720]/best[height<=480]',
-            '480p': 'best[height<=480]/best[height<=360]',
-            '360p': 'best[height<=360]/worst[height>=240]'
+            '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+            '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+            '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]',
+            '360p': 'bestvideo[height<=360]+bestaudio/best[height<=360]'
         }
         
-        actual_format = quality_map.get(resolution, 'best[height<=720]')
+        actual_format = quality_map.get(resolution, 'bestvideo+bestaudio/best')
         
         return {
             'format': actual_format,
             'outtmpl': 'YouTube_%(title).100s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
+            'retries': 10,
+            'fragment_retries': 10,
+            'skip_unavailable_fragments': True,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'web'],
@@ -174,36 +135,102 @@ class YouTubeDownloader:
                 }
             },
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36',
-                'Accept': '*/*',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
                 'Referer': 'https://www.youtube.com/',
             },
-            'progress_hooks': [TelegramProgressHook(update, context, url, "YouTube", resolution).hook],
         }
     
-    async def download_via_api_fallback(self, video_id, resolution, update, context):
-        """API verification passed but download failed - try alternative"""
+    async def try_alternative_method(self, url, resolution, update, context):
+        """✅ Alternative download method when bot detection occurs"""
         try:
-            # Get video info via API for better error handling
-            api_url = "https://www.googleapis.com/youtube/v3/videos"
-            params = {
-                'part': 'snippet',
-                'id': video_id,
-                'key': self.api_key
+            # Try with simpler options
+            simple_opts = {
+                'format': 'best[height<=720]' if resolution in ['720p', '1080p'] else f'best[height<={resolution}]',
+                'outtmpl': 'YouTube_%(title).100s.%(ext)s',
+                'quiet': True,
             }
             
-            response = requests.get(api_url, params=params)
-            data = response.json()
-            
-            if 'items' in data and data['items']:
-                title = data['items'][0]['snippet']['title']
-                return False, f"Video available but download temporary blocked: {title}"
-            else:
-                return False, "Download failed. Please try again later."
+            with yt_dlp.YoutubeDL(simple_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                title = info.get('title', 'YouTube ভিডিও')
+                return True, (filename, title, 'video')
                 
         except Exception as e:
-            return False, "Temporary download issue. Please try again."
+            return False, f"Alternative method failed: {str(e)}"
+
+# ✅ FIXED Audio download function
+async def download_audio(url, platform, update, context):
+    """অডিও ডাউনলোড করুন with bot detection bypass"""
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
+            'quiet': True,
+            'retries': 10,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.5',
+            },
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            filename = os.path.splitext(filename)[0] + '.mp3'
+            title = info.get('title', f'{platform} অডিও')
+            
+            return True, (filename, title, 'audio')
+    except Exception as e:
+        logger.error(f"{platform} অডিও ডাউনলোড ত্রুটি: {e}")
+        
+        # ✅ Try fallback for audio
+        try:
+            simple_audio_opts = {
+                'format': 'bestaudio',
+                'outtmpl': f'{platform}_%(title).100s.%(ext)s',
+            }
+            
+            with yt_dlp.YoutubeDL(simple_audio_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                title = info.get('title', f'{platform} অডিও')
+                return True, (filename, title, 'audio')
+        except Exception as e2:
+            return False, f"Audio download failed: {str(e2)}"
+
+# ✅ FIXED Other video download function
+async def download_other_video(url, platform, format_string, resolution, update, context):
+    """Instagram, Twitter, TikTok এর জন্য ভিডিও ডাউনলোড"""
+    try:
+        ydl_opts = {
+            'format': 'best',
+            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
+            'quiet': True,
+            'retries': 10,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            title = info.get('title', f'{platform} ভিডিও')
+            
+            return True, (filename, title, 'video')
+    except Exception as e:
+        logger.error(f"{platform} ভিডিও ডাউনলোড ত্রুটি: {e}")
+        return False, str(e)
 
 # Initialize YouTube downloader
 youtube_downloader = YouTubeDownloader()
@@ -259,6 +286,7 @@ class TelegramProgressHook:
         except Exception as e:
             logger.error(f"Progress message delete error: {e}")
 
+# ✅ REST OF YOUR CODE REMAINS THE SAME (নিচের অংশ একই থাকবে)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ব্যবহারকারীকে শুরু করার নির্দেশনা পাঠানো"""
     welcome_text = """
@@ -401,52 +429,6 @@ async def select_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await handle_download_result(update, context, success, result, platform)
     return ConversationHandler.END
 
-async def download_other_video(url, platform, format_string, resolution, update, context):
-    """Instagram, Twitter, TikTok এর জন্য ভিডিও ডাউনলোড"""
-    try:
-        ydl_opts = {
-            'format': 'best',
-            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
-            'quiet': True,
-            'progress_hooks': [TelegramProgressHook(update, context, url, platform, resolution).hook],
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title = info.get('title', f'{platform} ভিডিও')
-            
-            return True, (filename, title, 'video')
-    except Exception as e:
-        logger.error(f"{platform} ভিডিও ডাউনলোড ত্রুটি: {e}")
-        return False, str(e)
-
-async def download_audio(url, platform, update, context):
-    """অডিও ডাউনলোড করুন"""
-    try:
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'outtmpl': f'{platform}_%(title).100s.%(ext)s',
-            'quiet': True,
-            'progress_hooks': [TelegramProgressHook(update, context, url, platform).hook],
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            filename = os.path.splitext(filename)[0] + '.mp3'
-            title = info.get('title', f'{platform} অডিও')
-            
-            return True, (filename, title, 'audio')
-    except Exception as e:
-        logger.error(f"{platform} অডিও ডাউনলোড ত্রুটি: {e}")
-        return False, str(e)
-
 async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_TYPE, success: bool, result, platform: str):
     """ডাউনলোড রেজাল্ট হ্যান্ডেল করুন"""
     if success:
@@ -487,7 +469,7 @@ async def handle_download_result(update: Update, context: ContextTypes.DEFAULT_T
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """কনভারসেশন ক্যান্সেল করুন"""
     await update.message.reply_text(
-        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন।',
+        'অপারেশন বাতিল করা হয়েছে। আপনি চাইলে আবার একটি ভিডিও লিঙ্ক পাঠাতে পারেন。',
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
