@@ -3,3 +3,5 @@ yt-dlp==2025.09.23
 flask==2.3.3
 requests==2.31.0
 pytube>=15.0.0
+python-telegram-bot
+ffmpeg-python
