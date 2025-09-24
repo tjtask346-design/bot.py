@@ -1,3 +1,4 @@
+import yt_dlp
 import logging
 import re
 import os
@@ -8,7 +9,6 @@ import time
 import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
-import yt_dlp
 import random
 
 # Flask app তৈরি করো
@@ -63,20 +63,53 @@ URL_KEY = 'url'
 TITLE_KEY = 'title'
 PLATFORM_KEY = 'platform'
 
-# ✅ FIXED YouTube Downloader Class
+# ✅ FIXED YouTube Downloader Class with COOKIES
 class YouTubeDownloader:
     def __init__(self):
         self.api_key = "AIzaSyB0wPvv25ijpmAiOsfQkmPnAOwEqS_x5_c"
+        self.cookies_str = self.get_cookies_string()
         
+    def get_cookies_string(self):
+        """Cookies string তৈরি করুন"""
+        cookies_json = [
+            {
+                "name": "__Secure-1PSID",
+                "value": "g.a0001giUYc8hMHPrGHLsOEmoicwW8KNsWKjmrAiuqaSEzEvaKrJlZepwhqNGOPl3e4sc4KWacgACgYKAcESARcSFQHGX2MiqInlLgkHiz2058btLNPWthoVAUF8yKpv4lW9bqXDdmrP78n4angL0076"
+            },
+            {
+                "name": "LOGIN_INFO", 
+                "value": "AFmmF2swRAIgakGU4wTZV73uHlzWlUZHA9DW7yp179aKzCmOKlgn8rYCICjZ4Itrsz5MMONvY40LzLDO9W4d8rKfuDXTZI6bf3kN:QUQ3MjNmeGZ3dm14R0VDTkR0bXFneWszei1SZ01yblRta0hVeDUtZG1GZkctT0ctVFNoNGZnYUJrYlFoTmdxa0VDbzZxakE1QURhOGk4T1NLcTk2bFd3NXM2U2EzeTFlelNxWnZrTFo4ZHlEaTE0UUF4YjI5Y1JZeXdWTUxiQ2F3QWdrVHhyN05WWmlHbGJOV1hacmxpdGJaNm00VVFuaHFB"
+            },
+            {
+                "name": "__Secure-3PSID",
+                "value": "g.a0001giUYc8hMHPrGHLsOEmoicwW8KNsWKjmrAiuqaSEzEvaKrJlO4jUP8g2s8UPVLbKN9fqygACgYKAccSARcSFQHGX2Mixd_rXgDquZajR92ryLJ_NxoVAUF8yKrZ7Jc4FwHLtmV3_v21f0DR0076"
+            },
+            {
+                "name": "SID",
+                "value": "g.a0001giUYc8hMHPrGHLsOEmoicwW8KNsWKjmrAiuqaSEzEvaKrJlsubo5a4xwGR7Yq5Mr-wAdAACgYKAV4SARcSFQHGX2MipdsQ8JO4Ae40FLDljVbvxhoVAUF8yKqm0tcb5Mea__pKTwfI6qRS0076"
+            },
+            {
+                "name": "VISITOR_INFO1_LIVE",
+                "value": "syTw1N-IGvs"
+            },
+            {
+                "name": "PREF",
+                "value": "f6=40000000&tz=Asia.Dhaka&f7=100"
+            }
+        ]
+        
+        cookies_dict = {cookie['name']: cookie['value'] for cookie in cookies_json}
+        return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
+    
     async def download_youtube_video(self, url, format_string, resolution, update, context):
-        """YouTube video download with bot detection bypass"""
+        """YouTube video download with COOKIES for bot detection bypass"""
         try:
             # 1. Extract video ID
             video_id = self.extract_video_id(url)
             if not video_id:
                 return False, "Invalid YouTube URL format"
             
-            # 2. Download with optimized settings
+            # 2. Download with COOKIES and optimized settings
             ydl_opts = self.get_optimized_ydl_opts(resolution)
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -89,9 +122,9 @@ class YouTubeDownloader:
             error_msg = str(e)
             logger.error(f"YouTube download error: {error_msg}")
             
-            # ✅ FIXED: Bot detection error handling
+            # ✅ FIXED: Bot detection error handling with cookies fallback
             if "Sign in to confirm you're not a bot" in error_msg:
-                return await self.try_alternative_method(url, resolution, update, context)
+                return await self.try_alternative_method_with_cookies(url, resolution, update, context)
             else:
                 return False, error_msg
     
@@ -110,7 +143,7 @@ class YouTubeDownloader:
         return None
     
     def get_optimized_ydl_opts(self, resolution):
-        """✅ OPTIMIZED yt-dlp options for bot detection bypass"""
+        """✅ OPTIMIZED yt-dlp options with COOKIES for bot detection bypass"""
         quality_map = {
             '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
             '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
@@ -134,23 +167,30 @@ class YouTubeDownloader:
                     'skip': ['dash', 'hls']
                 }
             },
+            'cookies': self.cookies_str,  # ✅ COOKIES ADDED HERE
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Accept-Encoding': 'gzip, deflate',
                 'Referer': 'https://www.youtube.com/',
+                'Cookie': self.cookies_str  # ✅ ADDITIONAL COOKIES IN HEADERS
             },
         }
     
-    async def try_alternative_method(self, url, resolution, update, context):
-        """✅ Alternative download method when bot detection occurs"""
+    async def try_alternative_method_with_cookies(self, url, resolution, update, context):
+        """✅ Alternative download method with enhanced cookies when bot detection occurs"""
         try:
-            # Try with simpler options
+            # Try with simpler options but stronger cookies
             simple_opts = {
                 'format': 'best[height<=720]' if resolution in ['720p', '1080p'] else f'best[height<={resolution}]',
                 'outtmpl': 'YouTube_%(title).100s.%(ext)s',
                 'quiet': True,
+                'cookies': self.cookies_str,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Cookie': self.cookies_str
+                }
             }
             
             with yt_dlp.YoutubeDL(simple_opts) as ydl:
@@ -160,11 +200,12 @@ class YouTubeDownloader:
                 return True, (filename, title, 'video')
                 
         except Exception as e:
-            return False, f"Alternative method failed: {str(e)}"
+            logger.error(f"Alternative method with cookies failed: {str(e)}")
+            return False, f"All methods failed: {str(e)}"
 
-# ✅ FIXED Audio download function
+# ✅ FIXED Audio download function with cookies for YouTube
 async def download_audio(url, platform, update, context):
-    """অডিও ডাউনলোড করুন with bot detection bypass"""
+    """অডিও ডাউনলোড করুন with cookies support for YouTube"""
     try:
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -176,12 +217,19 @@ async def download_audio(url, platform, update, context):
             'outtmpl': f'{platform}_%(title).100s.%(ext)s',
             'quiet': True,
             'retries': 10,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.5',
-            },
         }
+
+        # YouTube এর জন্য cookies add করুন
+        if platform == "YouTube":
+            ydl_opts['cookies'] = youtube_downloader.cookies_str
+            ydl_opts['http_headers'] = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Cookie': youtube_downloader.cookies_str
+            }
+        else:
+            ydl_opts['http_headers'] = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -193,12 +241,15 @@ async def download_audio(url, platform, update, context):
     except Exception as e:
         logger.error(f"{platform} অডিও ডাউনলোড ত্রুটি: {e}")
         
-        # ✅ Try fallback for audio
+        # ✅ Try fallback for audio with cookies
         try:
             simple_audio_opts = {
                 'format': 'bestaudio',
                 'outtmpl': f'{platform}_%(title).100s.%(ext)s',
             }
+            
+            if platform == "YouTube":
+                simple_audio_opts['cookies'] = youtube_downloader.cookies_str
             
             with yt_dlp.YoutubeDL(simple_audio_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -208,7 +259,7 @@ async def download_audio(url, platform, update, context):
         except Exception as e2:
             return False, f"Audio download failed: {str(e2)}"
 
-# ✅ FIXED Other video download function
+# ✅ FIXED Other video download function (Instagram, Twitter, TikTok)
 async def download_other_video(url, platform, format_string, resolution, update, context):
     """Instagram, Twitter, TikTok এর জন্য ভিডিও ডাউনলোড"""
     try:
@@ -232,8 +283,14 @@ async def download_other_video(url, platform, format_string, resolution, update,
         logger.error(f"{platform} ভিডিও ডাউনলোড ত্রুটি: {e}")
         return False, str(e)
 
-# Initialize YouTube downloader
+# Initialize YouTube downloader with cookies
 youtube_downloader = YouTubeDownloader()
+
+# ✅ REST OF YOUR CODE REMAINS EXACTLY THE SAME (বাকি code একই থাকবে)
+# TelegramProgressHook, start, help_command, is_youtube_url, is_instagram_url, 
+# is_twitter_url, is_tiktok_url, get_platform_name, handle_video_url, 
+# select_format, select_resolution, handle_download_result, cancel, 
+# handle_message, main function - সব একই থাকবে
 
 class TelegramProgressHook:
     def __init__(self, update, context, url, platform, resolution=None):
@@ -286,7 +343,6 @@ class TelegramProgressHook:
         except Exception as e:
             logger.error(f"Progress message delete error: {e}")
 
-# ✅ REST OF YOUR CODE REMAINS THE SAME (নিচের অংশ একই থাকবে)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ব্যবহারকারীকে শুরু করার নির্দেশনা পাঠানো"""
     welcome_text = """
@@ -503,7 +559,7 @@ def main():
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(conv_handler)
 
-    print("বট চলছে... YouTube API Integrated!")
+    print("বট চলছে... YouTube API Integrated with COOKIES!")
     
     def run_flask():
         app.run(host='0.0.0.0', port=10000, debug=False, use_reloader=False)
