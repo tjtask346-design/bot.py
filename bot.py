@@ -1,201 +1,370 @@
-import yt_dlp
-import logging
-import re
 import os
-import asyncio
-from flask import Flask, request
-import threading
-import time
+import logging
+import tempfile
 import requests
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
-import random
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from pytube import YouTube
+from flask import Flask
+import re
 
-# Create Flask app
+# Flask app for Render
 app = Flask(__name__)
 
-# Keep alive function - update with your URL
-def keep_alive():
-    while True:
-        try:
-            requests.get("https://mraim777.onrender.com/")  # ✅ Change with your URL
-            time.sleep(300)  # 5 minutes
-        except:
-            pass
-
-# Start auto ping when Flask app starts
-@app.before_request
-def before_first_request():
-    if not hasattr(app, 'keep_alive_started'):
-        app.keep_alive_started = True
-        thread = threading.Thread(target=keep_alive)
-        thread.daemon = True
-        thread.start()
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-# Setup logging
+# Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Your Telegram bot token
-TOKEN = "8252054122:AAGicJLaNKnXPBDuLkQ3cH4QdhOaSRJSEdA"
+# Bot token from environment variable
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# Your group link
-GROUP_LINK = "https://t.me/allapkm0d369"
-GROUP_MESSAGE = "In this group, you'll find Premium Apk Mods for CapCut Pro, Remini Premium, Lightroom, and many other apps: https://t.me/allapkm0d369"
-
-# Regular expressions to match URL patterns
-YOUTUBE_REGEX = r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})'
-INSTAGRAM_REGEX = r'(https?://)?(www\.)?(instagram\.com|instagr\.am)/(p|reel)/([a-zA-Z0-9_-]+)'
-TWITTER_REGEX = r'(https?://)?(www\.)?(twitter\.com|x\.com)/([a-zA-Z0-9_]+)/status/([0-9]+)'
-
-# Conversation states
-SELECT_FORMAT, SELECT_RESOLUTION = range(2)
-
-# User data keys
-URL_KEY = 'url'
-TITLE_KEY = 'title'
-PLATFORM_KEY = 'platform'
-
-# ✅ FIXED YouTube Downloader Class with COOKIES
-class YouTubeDownloader:
+class VideoDownloaderBot:
     def __init__(self):
-        self.api_key = "AIzaSyB0wPvv25ijpmAiOsfQkmPnAOwEqS_x5_c"
-        self.cookies_str = self.get_cookies_string()
-        
-    def get_cookies_string(self):
-        """Enhanced cookies configuration""" # Updated comment
-        # User-provided cookies
-        cookies_json = [
-            {"domain":".youtube.com","expirationDate":1758701849.850697,"hostOnly":false,"httpOnly":true,"name":"GPS","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"1"},
-            {"domain":".youtube.com","expirationDate":1790236128.296859,"hostOnly":false,"httpOnly":true,"name":"__Secure-1PSIDTS","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"sidts-CjQBmkD5S_cYz-RrX415uk381yN5GqaeeE2ApUSfhy-4pkI3uWvs_dXeY4XSDMIvUJPA6CwwEAA"},
-            {"domain":".youtube.com","expirationDate":1790236128.297679,"hostOnly":false,"httpOnly":true,"name":"__Secure-3PSIDTS","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"sidts-CjQBmkD5S_cYz-RrX415uk381yN5GqaeeE2ApUSfhy-4pkI3uWvs_dXeY4XSDMIvUJPA6CwwEAA"},
-            {"domain":".youtube.com","expirationDate":1793260128.298252,"hostOnly":false,"httpOnly":true,"name":"HSID","path":"/","sameSite":"unspecified","secure":false,"session":false,"storeId":"0","value":"A8dUAoaIq3Okzx1qR"},
-            {"domain":".youtube.com","expirationDate":1793260128.298729,"hostOnly":false,"httpOnly":true,"name":"SSID","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"A2bm3bQawqstklCk2"},
-            {"domain":".youtube.com","expirationDate":1793260128.299373,"hostOnly":false,"httpOnly":false,"name":"APISID","path":"/","sameSite":"unspecified","secure":false,"session":false,"storeId":"0","value":"f-_GvDkYooNrsENN/AmUSVJwzqomHpawf7"},
-            {"domain":".youtube.com","expirationDate":1793260128.299836,"hostOnly":false,"httpOnly":false,"name":"SAPISID","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"JXtxVr73IdnSpwzL/ABfoqcnH1gIr1oKBn"},
-            {"domain":".youtube.com","expirationDate":1793260128.300313,"hostOnly":false,"httpOnly":false,"name":"__Secure-1PAPISID","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"JXtxVr73IdnSpwzL/ABfoqcnH1gIr1oKBn"},
-            {"domain":".youtube.com","expirationDate":1793260128.300778,"hostOnly":false,"httpOnly":false,"name":"__Secure-3PAPISID","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"JXtxVr73IdnSpwzL/ABfoqcnH1gIr1oKBn"},
-            {"domain":".youtube.com","expirationDate":1793260128.301205,"hostOnly":false,"httpOnly":false,"name":"SID","path":"/","sameSite":"unspecified","secure":false,"session":false,"storeId":"0","value":"g.a0001giUYeT4iWmujRfU-V883l-4LiijmtcefGX7RhtKXQnHgIqlQekf8bCwPPftBSCvdXaOPAACgYKAYQSARcSFQHGX2Mi7jtlVR5jkAw14vDZx5ut2xoVAUF8yKprERtFI0DnHxloUOd1p4KJ0076"},
-            {"domain":".youtube.com","expirationDate":1793260128.301664,"hostOnly":false,"httpOnly":true,"name":"__Secure-1PSID","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"g.a0001giUYeT4iWmujRfU-V883l-4LiijmtcefGX7RhtKXQnHgIqlsaYxBHL-RyJYtE9GxmJ8rgACgYKAVISARcSFQHGX2MiYk8u7B1bL4Wsae23rkWd5RoVAUF8yKqBMRTzZ-wJ42TAmp5nBR540076"},
-            {"domain":".youtube.com","expirationDate":1793260128.302111,"hostOnly":false,"httpOnly":true,"name":"__Secure-3PSID","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"g.a0001giUYeT4iWmujRfU-V883l-4LiijmtcefGX7RhtKXQnHgIql7LlZsYnMm9flKkb_1bqR0wACgYKARwSARcSFQHGX2MixSdffHhPu9mOghC9n_ggqBoVAUF8yKqkkUpZJd0yvmxwkr-JSq3i0076"},
-            {"domain":".youtube.com","expirationDate":1793260129.270043,"hostOnly":false,"httpOnly":true,"name":"LOGIN_INFO","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"AFmmF2swRQIgZ63MGSr85apR7BO34G2FhW6vn4Ya4BdJEfPLrCkx4k8CIQCUhXaeQV7TxuBmSlANYT7IUewpr4tp83vWSwtOv29W_Q:QUQ3MjNmelBHbmw0Y1dFVnVtVUZvRlhlU2hnUWVJcDVoNkRCNkJiVC1nNENLblBRVkxJUGw2VUE3THZZNldpeVJHMWd0bkdmeG9MZkhwekhSbWFpZ0tFYWZLNUZrYXAxVlVXNHJnc1REamtFczM1Vkt2SkR2bGlOY09jSTg3ZDBCWGFsY1ExaGg0di1oa3pCYVltUmgybVNwM2RvdmlUbUVB"},
-            {"domain":".youtube.com","expirationDate":1793260358.716464,"hostOnly":false,"httpOnly":false,"name":"PREF","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"f6=40000000&tz=Asia.Dhaka&f7=100"},{"domain":".youtube.com","expirationDate":1790236356.437945,"hostOnly":false,"httpOnly":false,"name":"SIDCC","path":"/","sameSite":"unspecified","secure":false,"session":false,"storeId":"0","value":"AKEyXzVCu1rcPamIiZM5PT_hVttuK1FGahxCtrEYrVN8fcXe3_bMWx16r8JR_RY-Vjx-V3FG"},
-            {"domain":".youtube.com","expirationDate":1790236356.438548,"hostOnly":false,"httpOnly":true,"name":"__Secure-1PSIDCC","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"AKEyXzULOTZ8RRQHncxK3__PPR_n-aXkv63-TrsxVPIw3WFsoj-4GQFCTWSNYmEYdL7cfa_1SA"},
-            {"domain":".youtube.com","expirationDate":1790236356.43929,"hostOnly":false,"httpOnly":true,"name":"__Secure-3PSIDCC","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"AKEyXzV7B6LMTUzDPG3xsd8RT6pjlobmaLv-Q3mF7QWtV9IdjKrtGqLsh4S5_H2gJsgjjlik"},
-            {"domain":".youtube.com","hostOnly":false,"httpOnly":true,"name":"YSC","partitionKey":{"hasCrossSiteAncestor":false,"topLevelSite":"https://youtube.com"},"path":"/","sameSite":"no_restriction","secure":true,"session":true,"storeId":"0","value":"cilOPyKvyrM"},
-            {"domain":".youtube.com","expirationDate":1774252129.551872,"hostOnly":false,"httpOnly":true,"name":"VISITOR_INFO1_LIVE","partitionKey":{"hasCrossSiteAncestor":false,"topLevelSite":"https://youtube.com"},"path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"Ne3IrnryhIg"},
-            {"domain":".youtube.com","expirationDate":1774252129.552988,"hostOnly":false,"httpOnly":true,"name":"VISITOR_PRIVACY_METADATA","partitionKey":{"hasCrossSiteAncestor":false,"topLevelSite":"https://youtube.com"},"path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"CgJCRBIEGgAgRw%3D%3D"},
-            {"domain":".youtube.com","expirationDate":1774252052.407803,"hostOnly":false,"httpOnly":true,"name":"__Secure-ROLLOUT_TOKEN","partitionKey":{"hasCrossSiteAncestor":false,"topLevelSite":"https://youtube.com"},"path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"CIKTy6iKof-T8AEQ9ZDlnfTwjwMY_aWIn_TwjwM%3D"}
-        ]
-        
-        cookies_dict = {cookie['name']: cookie['value'] for cookie in cookies_json}
-        return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
+        self.supported_domains = {
+            'youtube.com': self.download_youtube,
+            'youtu.be': self.download_youtube,
+            'tiktok.com': self.download_tiktok,
+            'vm.tiktok.com': self.download_tiktok,
+            'instagram.com': self.download_instagram,
+            'www.instagram.com': self.download_instagram,
+            'twitter.com': self.download_twitter,
+            'x.com': self.download_twitter,
+            'facebook.com': self.download_facebook,
+            'fb.watch': self.download_facebook
+        }
     
-    async def download_youtube_video(self, url, format_string, resolution, update, context):
-        """YouTube video download with COOKIES for bot detection bypass"""
-        try:
-            # 1. Extract video ID
-            video_id = self.extract_video_id(url)
-            if not video_id:
-                return False, "Invalid YouTube URL format"
-            
-            # 2. Download with COOKIES and optimized settings
-            ydl_opts = self.get_optimized_ydl_opts(resolution)
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                title = info.get('title', 'YouTube Video')
-                return True, (filename, title, 'video')
-                
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"YouTube download error: {error_msg}")
-            
-            # ✅ FIXED: Bot detection error handling with cookies fallback
-            if "Sign in to confirm you're not a bot" in error_msg:
-                return await self.try_alternative_method_with_cookies(url, resolution, update, context)
-            else:
-                return False, error_msg
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send a message when the command /start is issued."""
+        user = update.effective_user
+        welcome_text = f"""
+👋 Hello {user.first_name}! 
+
+I'm a Video Downloader Bot. I can download videos from:
+
+✅ YouTube (pytube ব্যবহার করে)
+✅ TikTok 
+✅ Instagram
+✅ X (Twitter)
+✅ Facebook
+
+Just send me the video URL and I'll download it for you!
+
+Supported platforms:
+- YouTube
+- TikTok
+- Instagram
+- X (Twitter)
+- Facebook
+
+Send me a link to get started!
+        """
+        await update.message.reply_text(welcome_text)
     
-    def extract_video_id(self, url):
-        """Extract video ID from YouTube URL"""
-        patterns = [
-            r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([^&=%\?]{11})',
-            r'youtube\.com/watch\?.*v=([^&]{11})',
-            r'youtu\.be/([^?]{11})'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send a message when the command /help is issued."""
+        help_text = """
+📋 **How to use this bot:**
+
+1. Send me a video URL from any supported platform
+2. I'll download the video and send it to you
+3. Maximum video length: 30 minutes
+4. Maximum file size: 50MB
+
+🔗 **Supported platforms:**
+- YouTube (pytube - fastest)
+- TikTok  
+- Instagram
+- X (Twitter)
+- Facebook
+
+⚠️ **Note:** Some videos might be restricted by the platform and cannot be downloaded.
+        """
+        await update.message.reply_text(help_text)
+    
+    def is_supported_url(self, url: str) -> bool:
+        """Check if the URL is from a supported platform."""
+        return any(domain in url for domain in self.supported_domains.keys())
+    
+    def get_download_function(self, url: str):
+        """Get the appropriate download function for the URL."""
+        for domain, download_func in self.supported_domains.items():
+            if domain in url:
+                return download_func
         return None
     
-    def get_optimized_ydl_opts(self, resolution):
-        """Enhanced download options with better error handling""" # Updated comment
-        quality_map = {
-            '1080p': 'best[height<=1080]',
-            '720p': 'best[height<=720]', 
-            '480p': 'best[height<=480]',
-            '360p': 'best[height<=360]'
-        }
-        
-        actual_format = quality_map.get(resolution, 'best')
-        
-        return {
-            'format': actual_format,
-            'outtmpl': 'YouTube_%(title).100s.%(ext)s',
-            'quiet': True,
-            'no_warnings': False,  # ✅ Warnings will be shown
-            'retries': 3,          # ✅ Retries set to 3
-            'fragment_retries': 10,
-            'skip_unavailable_fragments': True,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'],
-                    'skip': ['dash', 'hls']
-                }
-            },
-            'cookies': self.cookies_str,  # ✅ COOKIES ADDED HERE
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Referer': 'https://www.youtube.com/',
-                'Cookie': self.cookies_str  # ✅ ADDITIONAL COOKIES IN HEADERS
-            },
-        }
-    
-    async def try_alternative_method_with_cookies(self, url, resolution, update, context):
-        """✅ Alternative download method with enhanced cookies when bot detection occurs"""
+    def download_youtube(self, url: str) -> dict:
+        """Download YouTube video using pytube."""
         try:
-            # Try with simpler options but stronger cookies
-            simple_opts = {
-                'format': 'best[height<=720]' if resolution in ['720p', '1080p'] else f'best[height<={resolution}]',
-                'outtmpl': 'YouTube_%(title).100s.%(ext)s',
-                'quiet': True,
-                'cookies': self.cookies_str,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Cookie': self.cookies_str
-                }
+            yt = YouTube(url)
+            
+            # Check duration (max 30 minutes)
+            if yt.length > 1800:
+                return {'error': 'Video is too long (max 30 minutes)'}
+            
+            # Get the best progressive stream (audio + video)
+            stream = yt.streams.filter(
+                progressive=True, 
+                file_extension='mp4'
+            ).order_by('resolution').desc().first()
+            
+            if not stream:
+                # If no progressive stream, get best video stream
+                video_stream = yt.streams.filter(
+                    file_extension='mp4', 
+                    only_video=True
+                ).order_by('resolution').desc().first()
+                
+                if not video_stream:
+                    return {'error': 'No suitable video stream found'}
+                
+                stream = video_stream
+            
+            # Download video
+            filename = f"{yt.title.replace('/', '_')}.mp4"
+            stream.download(filename=filename)
+            
+            return {
+                'filename': filename,
+                'title': yt.title,
+                'duration': yt.length,
+                'thumbnail': yt.thumbnail_url
             }
             
-            with yt_dlp.YoutubeDL(simple_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                title = info.get('title', 'YouTube Video')
-                return True, (filename, title, 'video')
-                
         except Exception as e:
-            logger.error(f"Alternative method with cookies failed: {str(e)}")
-            return False, f"All methods failed: {str(e)}"
+            logger.error(f"YouTube download error: {e}")
+            return {'error': f'YouTube download failed: {str(e)}'}
+    
+    def download_tiktok(self, url: str) -> dict:
+        """Download TikTok video."""
+        try:
+            # Simple TikTok download using direct URL (for demonstration)
+            # Note: TikTok has strong anti-scraping measures
+            api_url = f"https://tikwm.com/api/?url={url}"
+            response = requests.get(api_url)
+            
+            if response.status_code != 200:
+                return {'error': 'TikTok API unavailable'}
+            
+            data = response.json()
+            
+            if data.get('code') != 0:
+                return {'error': 'TikTok video not found'}
+            
+            video_url = data['data']['play']
+            title = data['data']['title']
+            
+            # Download video
+            video_response = requests.get(video_url)
+            filename = "tiktok_video.mp4"
+            
+            with open(filename, 'wb') as f:
+                f.write(video_response.content)
+            
+            return {
+                'filename': filename,
+                'title': title,
+                'duration': 0,
+                'thumbnail': data['data']['cover']
+            }
+            
+        except Exception as e:
+            logger.error(f"TikTok download error: {e}")
+            return {'error': f'TikTok download failed: {str(e)}'}
+    
+    def download_instagram(self, url: str) -> dict:
+        """Download Instagram video."""
+        try:
+            # Simple Instagram download using public API
+            api_url = f"https://instagram-scraper-api.vercel.app/api?url={url}"
+            response = requests.get(api_url)
+            
+            if response.status_code != 200:
+                return {'error': 'Instagram API unavailable'}
+            
+            data = response.json()
+            
+            if not data.get('video_url'):
+                return {'error': 'Instagram video not found'}
+            
+            video_url = data['video_url']
+            title = data.get('title', 'Instagram Video')
+            
+            # Download video
+            video_response = requests.get(video_url)
+            filename = "instagram_video.mp4"
+            
+            with open(filename, 'wb') as f:
+                f.write(video_response.content)
+            
+            return {
+                'filename': filename,
+                'title': title,
+                'duration': 0,
+                'thumbnail': data.get('thumbnail_url', '')
+            }
+            
+        except Exception as e:
+            logger.error(f"Instagram download error: {e}")
+            return {'error': f'Instagram download failed: {str(e)}'}
+    
+    def download_twitter(self, url: str) -> dict:
+        """Download Twitter/X video."""
+        try:
+            # Simple Twitter download using public API
+            api_url = f"https://twitsave.com/info?url={url}"
+            response = requests.get(api_url)
+            
+            if response.status_code != 200:
+                return {'error': 'Twitter API unavailable'}
+            
+            data = response.json()
+            
+            if not data.get('video_url'):
+                return {'error': 'Twitter video not found'}
+            
+            video_url = data['video_url'][0] if isinstance(data['video_url'], list) else data['video_url']
+            title = data.get('text', 'Twitter Video')[:50]
+            
+            # Download video
+            video_response = requests.get(video_url)
+            filename = "twitter_video.mp4"
+            
+            with open(filename, 'wb') as f:
+                f.write(video_response.content)
+            
+            return {
+                'filename': filename,
+                'title': title,
+                'duration': 0,
+                'thumbnail': data.get('thumbnail', '')
+            }
+            
+        except Exception as e:
+            logger.error(f"Twitter download error: {e}")
+            return {'error': f'Twitter download failed: {str(e)}'}
+    
+    def download_facebook(self, url: str) -> dict:
+        """Download Facebook video."""
+        try:
+            # Facebook videos are tricky due to login requirements
+            # This is a basic implementation
+            api_url = f"https://getfbvideo.com/?url={url}"
+            response = requests.get(api_url)
+            
+            if response.status_code != 200:
+                return {'error': 'Facebook video download unavailable'}
+            
+            # Extract video URL from response (simplified)
+            # Note: Facebook has strong protections
+            return {'error': 'Facebook download currently not supported'}
+            
+        except Exception as e:
+            logger.error(f"Facebook download error: {e}")
+            return {'error': f'Facebook download failed: {str(e)}'}
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle incoming messages containing URLs."""
+        message = update.message
+        url = message.text
+        
+        if not url.startswith(('http://', 'https://')):
+            await message.reply_text("❌ Please send a valid URL starting with http:// or https://")
+            return
+        
+        if not self.is_supported_url(url):
+            await message.reply_text("❌ Unsupported platform. I support YouTube, TikTok, Instagram, X, and Facebook.")
+            return
+        
+        # Send processing message
+        processing_msg = await message.reply_text("⏳ Processing your video...")
+        
+        try:
+            # Get appropriate download function
+            download_func = self.get_download_function(url)
+            
+            if not download_func:
+                await processing_msg.edit_text("❌ Unsupported platform")
+                return
+            
+            # Download video
+            result = download_func(url)
+            
+            if 'error' in result:
+                await processing_msg.edit_text(f"❌ Error: {result['error']}")
+                return
+            
+            # Check file size (max 50MB for Telegram)
+            file_size = os.path.getsize(result['filename']) / (1024 * 1024)  # MB
+            if file_size > 50:
+                os.remove(result['filename'])
+                await processing_msg.edit_text("❌ Video is too large (max 50MB)")
+                return
+            
+            # Send video
+            await processing_msg.edit_text("📤 Uploading video...")
+            
+            with open(result['filename'], 'rb') as video_file:
+                await message.reply_video(
+                    video=video_file,
+                    caption=f"🎬 {result['title']}",
+                    supports_streaming=True,
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60
+                )
+            
+            await processing_msg.delete()
+            
+            # Clean up
+            if os.path.exists(result['filename']):
+                os.remove(result['filename'])
+            
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            await processing_msg.edit_text("❌ An error occurred while processing the video.")
+            
+            # Clean up if file exists
+            if 'result' in locals() and 'filename' in result and os.path.exists(result['filename']):
+                os.remove(result['filename'])
+
+def main():
+    """Start the bot."""
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN environment variable is not set!")
+        return
+    
+    # Create bot instance
+    bot = VideoDownloaderBot()
+    
+    # Create application
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Add handlers
+    application.add_handler(CommandHandler("start", bot.start))
+    application.add_handler(CommandHandler("help", bot.help_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
+    
+    # Start the Bot
+    logger.info("Bot is starting...")
+    application.run_polling()
+
+@app.route('/')
+def home():
+    return "Telegram Video Downloader Bot is running! (pytube version)"
+
+@app.route('/health')
+def health():
+    return "OK"
+
+if __name__ == '__main__':
+    # For local testing
+    if os.environ.get('RENDER'):
+        # On Render, we'll use the Flask app
+        port = int(os.environ.get('PORT', 8000))
+        app.run(host='0.0.0.0', port=port)
+    else:
+        # Local development - run the bot directly
+        main()
