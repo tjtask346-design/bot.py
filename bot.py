@@ -9,10 +9,17 @@ import urllib.parse
 
 app = Flask(__name__)
 
-# Environment variables
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
+# ✅ CORRECTED: Use your exact environment variable names
+BOT_TOKEN = os.environ.get('bot-token')  # আপনার exact variable name
+RENDER_EXTERNAL_URL = os.environ.get('render-url')  # আপনার exact variable name  
 PORT = int(os.environ.get('PORT', 8000))
-RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL', '')
+
+# Validate environment variables
+if not BOT_TOKEN:
+    logging.error("❌ CRITICAL ERROR: bot-token environment variable is not set!")
+    logging.error("Please check your Render environment variables")
+else:
+    logging.info("✅ bot-token loaded successfully")
 
 # Logging setup
 logging.basicConfig(
@@ -28,22 +35,24 @@ class VideoDownloaderBot:
             'youtu.be': 'YouTube',
             'tiktok.com': 'TikTok',
             'vm.tiktok.com': 'TikTok',
-            'instagram.com': 'Instagram',
         }
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
-        welcome_text = f"""
-👋 Hello {user.first_name}! 
+        await update.message.reply_text(f"""
+🤖 Hello {user.first_name}! 
 
 I can download videos from:
-✅ YouTube | ✅ TikTok | ✅ Instagram
+✅ YouTube | ✅ TikTok
 
-Just send me a video URL!
-        """
-        await update.message.reply_text(welcome_text)
+Send me a video URL!
+        """)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not BOT_TOKEN:
+            await update.message.reply_text("❌ Bot configuration error. Please try later.")
+            return
+            
         message = update.message
         url = message.text.strip()
         
@@ -55,10 +64,8 @@ Just send me a video URL!
             await self.download_youtube(update, url)
         elif 'tiktok.com' in url or 'vm.tiktok.com' in url:
             await self.download_tiktok(update, url)
-        elif 'instagram.com' in url:
-            await self.download_instagram(update, url)
         else:
-            await message.reply_text("❌ Supported: YouTube, TikTok, Instagram")
+            await message.reply_text("❌ Supported: YouTube, TikTok")
     
     async def download_youtube(self, update: Update, url: str):
         try:
@@ -80,7 +87,7 @@ Just send me a video URL!
             os.remove(filename)
             
         except Exception as e:
-            await update.message.reply_text(f"❌ YouTube Error: {str(e)}")
+            await update.message.reply_text(f"❌ Error: {str(e)}")
     
     async def download_tiktok(self, update: Update, url: str):
         try:
@@ -88,48 +95,27 @@ Just send me a video URL!
             
             api_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(url)}"
             response = requests.get(api_url, timeout=30)
-            data = response.json()
             
-            if data.get('code') == 0:
-                video_url = data['data']['play']
-                video_response = requests.get(video_url, timeout=60)
-                
-                with open("tiktok.mp4", 'wb') as f:
-                    f.write(video_response.content)
-                
-                with open("tiktok.mp4", 'rb') as video_file:
-                    await update.message.reply_video(video_file, caption="📱 TikTok Video")
-                
-                os.remove("tiktok.mp4")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('code') == 0:
+                    video_url = data['data']['play']
+                    video_response = requests.get(video_url, timeout=60)
+                    
+                    with open("tiktok.mp4", 'wb') as f:
+                        f.write(video_response.content)
+                    
+                    with open("tiktok.mp4", 'rb') as video_file:
+                        await update.message.reply_video(video_file, caption="📱 TikTok Video")
+                    
+                    os.remove("tiktok.mp4")
+                else:
+                    await update.message.reply_text("❌ TikTok video not found")
             else:
-                await update.message.reply_text("❌ TikTok video not found")
+                await update.message.reply_text("❌ TikTok service error")
                 
         except Exception as e:
-            await update.message.reply_text(f"❌ TikTok Error: {str(e)}")
-    
-    async def download_instagram(self, update: Update, url: str):
-        try:
-            await update.message.reply_text("⏳ Downloading Instagram video...")
-            
-            api_url = f"https://igram.io/api/ig?url={urllib.parse.quote(url)}"
-            response = requests.get(api_url, timeout=30)
-            data = response.json()
-            
-            if data.get('url'):
-                video_response = requests.get(data['url'], timeout=60)
-                
-                with open("instagram.mp4", 'wb') as f:
-                    f.write(video_response.content)
-                
-                with open("instagram.mp4", 'rb') as video_file:
-                    await update.message.reply_video(video_file, caption="📸 Instagram Video")
-                
-                os.remove("instagram.mp4")
-            else:
-                await update.message.reply_text("❌ Instagram video not found")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Instagram Error: {str(e)}")
+            await update.message.reply_text(f"❌ Error: {str(e)}")
 
 # Global application instance
 application = None
@@ -137,7 +123,7 @@ application = None
 def setup_bot():
     global application
     if not BOT_TOKEN:
-        logger.error("❌ BOT_TOKEN not set!")
+        logger.error("❌ Cannot setup bot: bot-token not set!")
         return None
     
     try:
@@ -153,68 +139,78 @@ def setup_bot():
         logger.error(f"❌ Bot setup error: {e}")
         return None
 
-# Flask routes
-@app.route('/')
+# Routes
+@app.route('/', methods=['GET', 'POST'])
 def home():
-    return "🤖 Bot is Running! Use /setwebhook to setup webhook."
+    if request.method == 'POST':
+        try:
+            if application:
+                update = Update.de_json(request.get_json(), application.bot)
+                application.update_queue.put(update)
+                return "✅ OK", 200
+            else:
+                return "❌ Bot not initialized", 500
+        except Exception as e:
+            logger.error(f"Error processing update: {e}")
+            return "❌ Error", 500
+    
+    return f"""
+    <h1>🤖 Telegram Video Bot</h1>
+    <p>Status: <strong>{"✅ Running" if BOT_TOKEN else "❌ Not Configured"}</strong></p>
+    <p>Bot Token: {"✅ Set" if BOT_TOKEN else "❌ Missing"}</p>
+    <p>External URL: {RENDER_EXTERNAL_URL or "Not set"}</p>
+    <p><a href="/setwebhook">Set Webhook</a> | <a href="/health">Health Check</a></p>
+    """
 
 @app.route('/health')
 def health():
-    return "✅ OK", 200
+    status = {
+        "status": "healthy" if BOT_TOKEN else "unhealthy",
+        "bot_token_set": bool(BOT_TOKEN),
+        "external_url_set": bool(RENDER_EXTERNAL_URL)
+    }
+    return status, 200 if BOT_TOKEN else 500
 
 @app.route('/setwebhook', methods=['GET'])
 def set_webhook():
+    if not BOT_TOKEN:
+        return "❌ bot-token not set in environment variables", 400
+    
     try:
-        if not BOT_TOKEN:
-            return "❌ BOT_TOKEN not set", 400
-        
-        if not RENDER_EXTERNAL_URL:
-            return "❌ RENDER_EXTERNAL_URL not set", 400
-        
-        webhook_url = f"{RENDER_EXTERNAL_URL}/webhook"
-        
-        # Setup bot if not done
         if not application:
             setup_bot()
         
+        webhook_url = RENDER_EXTERNAL_URL if RENDER_EXTERNAL_URL else "https://your-app.onrender.com"
+        
         if application:
-            application.bot.set_webhook(webhook_url)
+            # Set webhook
+            result = application.bot.set_webhook(webhook_url)
             logger.info(f"✅ Webhook set to: {webhook_url}")
-            return f"✅ Webhook set to: {webhook_url}", 200
-        else:
-            return "❌ Bot not initialized", 500
-            
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return f"❌ Error: {str(e)}", 500
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    try:
-        if not application:
-            return "❌ Bot not initialized", 500
-        
-        update = Update.de_json(request.get_json(), application.bot)
-        application.update_queue.put(update)
-        return "✅ OK", 200
-    except Exception as e:
-        logger.error(f"Webhook processing error: {e}")
-        return "❌ Error", 500
-
-@app.route('/getwebhook', methods=['GET'])
-def get_webhook_info():
-    try:
-        if not application:
-            return "❌ Bot not initialized", 500
-        
-        info = application.bot.get_webhook_info()
-        return f"Webhook info: {info.to_dict()}", 200
+            return f"""
+            <h1>✅ Webhook Set Successfully</h1>
+            <p><strong>URL:</strong> {webhook_url}</p>
+            <p><strong>Result:</strong> {result}</p>
+            <p><a href="/">Home</a> | <a href="/health">Health</a></p>
+            """
+        return "❌ Bot not initialized", 500
     except Exception as e:
         return f"❌ Error: {str(e)}", 500
 
 if __name__ == '__main__':
-    # Setup bot first
+    logger.info("🚀 Starting application...")
+    logger.info(f"🔑 bot-token: {'✅ Set' if BOT_TOKEN else '❌ Not Set'}")
+    logger.info(f"🌐 render-url: {RENDER_EXTERNAL_URL or 'Not Set'}")
+    
+    # Setup bot
     setup_bot()
     
-    # Run Flask app (for Render)
+    # Auto-set webhook if possible
+    if BOT_TOKEN and RENDER_EXTERNAL_URL and application:
+        try:
+            application.bot.set_webhook(RENDER_EXTERNAL_URL)
+            logger.info(f"✅ Auto-set webhook to: {RENDER_EXTERNAL_URL}")
+        except Exception as e:
+            logger.error(f"❌ Auto-webhook error: {e}")
+    
+    # Run app
     app.run(host='0.0.0.0', port=PORT, debug=False)
