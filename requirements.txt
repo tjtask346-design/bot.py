@@ -3,4 +3,3 @@ pytube==15.0.0
 requests==2.31.0
 flask==2.3.3
 gunicorn==21.2.0
-tiktok-downloader==0.2.6
