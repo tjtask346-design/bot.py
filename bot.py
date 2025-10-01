@@ -1,216 +1,83 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+import yt_dlp
 import os
-import logging
-import requests
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from pytube import YouTube
-from flask import Flask, request
-import urllib.parse
 
-app = Flask(__name__)
+user_links = {}
 
-# ✅ CORRECTED: Use your exact environment variable names
-BOT_TOKEN = os.environ.get('bot-token')  # আপনার exact variable name
-RENDER_EXTERNAL_URL = os.environ.get('render-url')  # আপনার exact variable name  
-PORT = int(os.environ.get('PORT', 8000))
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🎬 Send me a video link from YouTube, Facebook, Instagram, TikTok, or Twitter.")
 
-# Validate environment variables
-if not BOT_TOKEN:
-    logging.error("❌ CRITICAL ERROR: bot-token environment variable is not set!")
-    logging.error("Please check your Render environment variables")
-else:
-    logging.info("✅ bot-token loaded successfully")
+async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text
+    user_id = update.message.from_user.id
+    user_links[user_id] = url
 
-# Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+    keyboard = [
+        [InlineKeyboardButton("🎵 Audio", callback_data='audio')],
+        [InlineKeyboardButton("📹 Video", callback_data='video')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("What do you want to download?", reply_markup=reply_markup)
 
-class VideoDownloaderBot:
-    def __init__(self):
-        self.supported_domains = {
-            'youtube.com': 'YouTube',
-            'youtu.be': 'YouTube',
-            'tiktok.com': 'TikTok',
-            'vm.tiktok.com': 'TikTok',
-        }
-    
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        await update.message.reply_text(f"""
-🤖 Hello {user.first_name}! 
+async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    choice = query.data
 
-I can download videos from:
-✅ YouTube | ✅ TikTok
+    if choice == 'audio':
+        await query.edit_message_text("⏳ Downloading audio...")
+        await download_audio(user_links[user_id], query)
+    elif choice == 'video':
+        keyboard = [
+            [InlineKeyboardButton("360p", callback_data='360')],
+            [InlineKeyboardButton("480p", callback_data='480')],
+            [InlineKeyboardButton("720p", callback_data='720')],
+            [InlineKeyboardButton("1080p", callback_data='1080')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("Choose resolution:", reply_markup=reply_markup)
+    elif choice in ['360', '480', '720', '1080']:
+        await query.edit_message_text(f"⏳ Downloading video in {choice}p...")
+        await download_video(user_links[user_id], query, choice)
 
-Send me a video URL!
-        """)
-    
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not BOT_TOKEN:
-            await update.message.reply_text("❌ Bot configuration error. Please try later.")
-            return
-            
-        message = update.message
-        url = message.text.strip()
-        
-        if not url.startswith(('http://', 'https://')):
-            await message.reply_text("❌ Please send a valid URL")
-            return
-        
-        if 'youtube.com' in url or 'youtu.be' in url:
-            await self.download_youtube(update, url)
-        elif 'tiktok.com' in url or 'vm.tiktok.com' in url:
-            await self.download_tiktok(update, url)
-        else:
-            await message.reply_text("❌ Supported: YouTube, TikTok")
-    
-    async def download_youtube(self, update: Update, url: str):
-        try:
-            await update.message.reply_text("⏳ Downloading YouTube video...")
-            
-            yt = YouTube(url)
-            stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-            
-            if not stream:
-                await update.message.reply_text("❌ No suitable stream found")
-                return
-            
-            filename = "video.mp4"
-            stream.download(filename=filename)
-            
-            with open(filename, 'rb') as video_file:
-                await update.message.reply_video(video=video_file, caption=f"🎬 {yt.title}")
-            
-            os.remove(filename)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {str(e)}")
-    
-    async def download_tiktok(self, update: Update, url: str):
-        try:
-            await update.message.reply_text("⏳ Downloading TikTok video...")
-            
-            api_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(url)}"
-            response = requests.get(api_url, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('code') == 0:
-                    video_url = data['data']['play']
-                    video_response = requests.get(video_url, timeout=60)
-                    
-                    with open("tiktok.mp4", 'wb') as f:
-                        f.write(video_response.content)
-                    
-                    with open("tiktok.mp4", 'rb') as video_file:
-                        await update.message.reply_video(video_file, caption="📱 TikTok Video")
-                    
-                    os.remove("tiktok.mp4")
-                else:
-                    await update.message.reply_text("❌ TikTok video not found")
-            else:
-                await update.message.reply_text("❌ TikTok service error")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {str(e)}")
-
-# Global application instance
-application = None
-
-def setup_bot():
-    global application
-    if not BOT_TOKEN:
-        logger.error("❌ Cannot setup bot: bot-token not set!")
-        return None
-    
-    try:
-        application = Application.builder().token(BOT_TOKEN).build()
-        bot = VideoDownloaderBot()
-        
-        application.add_handler(CommandHandler("start", bot.start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
-        
-        logger.info("✅ Bot setup completed")
-        return application
-    except Exception as e:
-        logger.error(f"❌ Bot setup error: {e}")
-        return None
-
-# Routes
-@app.route('/', methods=['GET', 'POST'])
-def home():
-    if request.method == 'POST':
-        try:
-            if application:
-                update = Update.de_json(request.get_json(), application.bot)
-                application.update_queue.put(update)
-                return "✅ OK", 200
-            else:
-                return "❌ Bot not initialized", 500
-        except Exception as e:
-            logger.error(f"Error processing update: {e}")
-            return "❌ Error", 500
-    
-    return f"""
-    <h1>🤖 Telegram Video Bot</h1>
-    <p>Status: <strong>{"✅ Running" if BOT_TOKEN else "❌ Not Configured"}</strong></p>
-    <p>Bot Token: {"✅ Set" if BOT_TOKEN else "❌ Missing"}</p>
-    <p>External URL: {RENDER_EXTERNAL_URL or "Not set"}</p>
-    <p><a href="/setwebhook">Set Webhook</a> | <a href="/health">Health Check</a></p>
-    """
-
-@app.route('/health')
-def health():
-    status = {
-        "status": "healthy" if BOT_TOKEN else "unhealthy",
-        "bot_token_set": bool(BOT_TOKEN),
-        "external_url_set": bool(RENDER_EXTERNAL_URL)
+async def download_audio(url, query):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+        }]
     }
-    return status, 200 if BOT_TOKEN else 500
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+        await query.message.reply_document(document=open(filename, 'rb'))
+        await query.message.reply_text(
+            "✅ Download complete!\n📢 Join our Telegram channel for more: https://t.me/allapkm0d369"
+        )
+        os.remove(filename)
 
-@app.route('/setwebhook', methods=['GET'])
-def set_webhook():
-    if not BOT_TOKEN:
-        return "❌ bot-token not set in environment variables", 400
-    
-    try:
-        if not application:
-            setup_bot()
-        
-        webhook_url = RENDER_EXTERNAL_URL if RENDER_EXTERNAL_URL else "https://your-app.onrender.com"
-        
-        if application:
-            # Set webhook
-            result = application.bot.set_webhook(webhook_url)
-            logger.info(f"✅ Webhook set to: {webhook_url}")
-            return f"""
-            <h1>✅ Webhook Set Successfully</h1>
-            <p><strong>URL:</strong> {webhook_url}</p>
-            <p><strong>Result:</strong> {result}</p>
-            <p><a href="/">Home</a> | <a href="/health">Health</a></p>
-            """
-        return "❌ Bot not initialized", 500
-    except Exception as e:
-        return f"❌ Error: {str(e)}", 500
+async def download_video(url, query, resolution):
+    ydl_opts = {
+        'format': f'bestvideo[height<={resolution}]+bestaudio/best',
+        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'merge_output_format': 'mp4'
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+        await query.message.reply_document(document=open(filename, 'rb'))
+        await query.message.reply_text(
+            "✅ Download complete!\n📢 Don't miss out—join our Telegram channel: https://t.me/allapkm0d369"
+        )
+        os.remove(filename)
 
-if __name__ == '__main__':
-    logger.info("🚀 Starting application...")
-    logger.info(f"🔑 bot-token: {'✅ Set' if BOT_TOKEN else '❌ Not Set'}")
-    logger.info(f"🌐 render-url: {RENDER_EXTERNAL_URL or 'Not Set'}")
-    
-    # Setup bot
-    setup_bot()
-    
-    # Auto-set webhook if possible
-    if BOT_TOKEN and RENDER_EXTERNAL_URL and application:
-        try:
-            application.bot.set_webhook(RENDER_EXTERNAL_URL)
-            logger.info(f"✅ Auto-set webhook to: {RENDER_EXTERNAL_URL}")
-        except Exception as e:
-            logger.error(f"❌ Auto-webhook error: {e}")
-    
-    # Run app
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+app = ApplicationBuilder().token("8119884133:AAE1dSDOjMXxrr3bOA7rdZofbpmif1XK1cA").build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+app.add_handler(CallbackQueryHandler(handle_choice))
+
+app.run_polling()
