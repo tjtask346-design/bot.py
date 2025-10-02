@@ -6,5 +6,5 @@ services:
     startCommand: bash start.sh
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        value: 8119884133:AAE1dSDOjMXxrr3bOA7rdZofbpmif1XK1cA
+        value: 8119884133:AAEa82LpN3FaRj0HpAg1YPhoWpWYJ-XBeqA
 buildCommand: pip install --upgrade pip && pip install -r requirements.txt
