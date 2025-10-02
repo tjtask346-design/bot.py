@@ -13,7 +13,7 @@ if not os.path.exists("downloads"):
 
 # Telegram bot setup
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://your-app.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://mraim777.onrender.com
 PORT = int(os.getenv("PORT", "3000"))
 
 app = Flask(__name__)
@@ -114,8 +114,8 @@ telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
 telegram_app.add_handler(CallbackQueryHandler(handle_choice))
 
-# Webhook routes
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+# Webhook route (fixed to /webhook)
+@app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
     telegram_app.update_queue.put(update)
@@ -127,5 +127,5 @@ def index():
 
 # Start server
 if __name__ == "__main__":
-    telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
     app.run(host="0.0.0.0", port=PORT)
