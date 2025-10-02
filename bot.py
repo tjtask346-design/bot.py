@@ -152,7 +152,7 @@ if __name__ == "__main__":
         await query.message.reply_text(f"❌ Error: {str(e)}")
 
 # Load bot token securely (optional: use .env file)
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Replace with your actual token
+BOT_TOKEN = 8119884133:AAHcCiT9zA9bc2_WQb8dgnKd0qTxLFhPPhA  # Replace with your actual token
 
 # Build and run the bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
