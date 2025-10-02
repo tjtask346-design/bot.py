@@ -1,12 +1,9 @@
 services:
-  - type: web
-    name: telegram-video-bot
-    env: python
-    plan: free
+  - type: worker
+    name: telegram-bot
+    runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn bot:app --bind 0.0.0.0:$PORT
+    startCommand: bash start.sh
     envVars:
-      - key: BOT_TOKEN
-        value: 8252054122:AAH6gKwR8QoqiFdH8syDTgEbR9vhWMdTBvc
-      - key: PORT
-        value: 8000
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8119884133:AAE1dSDOjMXxrr3bOA7rdZofbpmif1XK1cA
