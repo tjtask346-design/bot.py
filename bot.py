@@ -121,7 +121,7 @@ async def download_video(url, query, resolution):
         await query.message.reply_text(f"❌ Error: {str(e)}")
 
 # Load bot token securely (optional: use .env file)
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Replace with your actual token
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Replace with your actual token
 
 # Build and run the bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
