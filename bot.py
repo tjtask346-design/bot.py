@@ -1,4 +1,5 @@
 import os
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -13,18 +14,16 @@ if not os.path.exists("downloads"):
 # Dictionary to store user links
 user_links = {}
 
-# Start command handler
+# Telegram handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 Send me a video link from YouTube, Facebook, Instagram, TikTok, or Twitter."
     )
 
-# Message handler for video links
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     user_id = update.message.from_user.id
 
-    # Validate URL
     if not url.startswith(("http://", "https://")):
         await update.message.reply_text("❌ Please send a valid video link.")
         return
@@ -38,7 +37,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("What do you want to download?", reply_markup=reply_markup)
 
-# Callback handler for button choices
 async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -69,7 +67,6 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"⏳ Downloading video in {choice}p...")
         await download_video(url, query, choice)
 
-# Function to download audio
 async def download_audio(url, query):
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -96,7 +93,6 @@ async def download_audio(url, query):
     except Exception as e:
         await query.message.reply_text(f"❌ Error: {str(e)}")
 
-# Function to download video
 async def download_video(url, query, resolution):
     ydl_opts = {
         'format': f'bestvideo[height<={resolution}]+bestaudio/best',
@@ -111,6 +107,41 @@ async def download_video(url, query, resolution):
 
         with open(filename, 'rb') as f:
             await query.message.reply_document(document=f)
+
+        await query.message.reply_text(
+            "✅ Download complete!\n📢 Don't miss out—join our Telegram channel: https://t.me/allapkm0d369"
+        )
+        os.remove(filename)
+
+    except Exception as e:
+        await query.message.reply_text(f"❌ Error: {str(e)}")
+
+# Telegram bot setup
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", "3000"))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://your-app.onrender.com
+
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+app.add_handler(CallbackQueryHandler(handle_choice))
+
+# Flask app for webhook
+flask_app = Flask(__name__)
+
+@flask_app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), app.bot)
+    app.update_queue.put(update)
+    return "ok"
+
+@flask_app.route("/")
+def index():
+    return "Bot is running!"
+
+if __name__ == "__main__":
+    app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    flask_app.run(host="0.0.0.0", port=PORT)            await query.message.reply_document(document=f)
 
         await query.message.reply_text(
             "✅ Download complete!\n📢 Don't miss out—join our Telegram channel: https://t.me/allapkm0d369"
