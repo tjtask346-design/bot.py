@@ -58,8 +58,7 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("360p", callback_data='360')],
             [InlineKeyboardButton("480p", callback_data='480')],
             [InlineKeyboardButton("720p", callback_data='720')],
-            [InlineKeyboardButton("1080p", callback_data='1080')]
-        ]
+ ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text("Choose resolution:", reply_markup=reply_markup)
 
@@ -111,6 +110,38 @@ async def download_video(url, query, resolution):
         await query.message.reply_text(
             "✅ Download complete!\n📢 Don't miss out—join our Telegram channel: https://t.me/allapkm0d369"
         )
+        os.remove(filename)
+
+    except Exception as e:
+        await query.message.reply_text(f"❌ Error: {str(e)}")
+
+# Load environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", "3000"))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://your-app.onrender.com
+
+# Telegram bot setup
+telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+telegram_app.add_handler(CallbackQueryHandler(handle_choice))
+
+# Flask app for webhook
+flask_app = Flask(__name__)
+
+@flask_app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    telegram_app.update_queue.put(update)
+    return "ok"
+
+@flask_app.route("/")
+def index():
+    return "Bot is running!"
+
+if __name__ == "__main__":
+    telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    flask_app.run(host="0.0.0.0", port=PORT)        )
         os.remove(filename)
 
     except Exception as e:
