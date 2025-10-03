@@ -6,6 +6,7 @@ from telegram.ext import (
     CallbackQueryHandler, ContextTypes, filters
 )
 import yt_dlp
+from pytube import YouTube
 
 # Ensure downloads folder exists
 if not os.path.exists("downloads"):
@@ -13,21 +14,19 @@ if not os.path.exists("downloads"):
 
 # Telegram bot setup
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://mraim777.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://yourdomain.onrender.com
 PORT = int(os.getenv("PORT", "3000"))
 
 app = Flask(__name__)
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Store user links
 user_links = {}
 
-# Handlers
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🎬 Send me a video link from YouTube, Facebook, Instagram, TikTok, or Twitter."
-    )
+    await update.message.reply_text("🎬 Send me a video link from YouTube, Facebook, Instagram, TikTok, or Twitter.")
 
+# Handle incoming link
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     user_id = update.message.from_user.id
@@ -43,6 +42,7 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("What do you want to download?", reply_markup=InlineKeyboardMarkup(keyboard))
 
+# Handle user choice
 async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -72,49 +72,77 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"⏳ Downloading video in {choice}p...")
         await download_video(url, query, choice)
 
+# Audio download with fallback
 async def download_audio(url, query):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-        }]
-    }
+    filename = None
     try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+            }]
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+    except Exception as e:
+        await query.message.reply_text(f"⚠️ yt_dlp failed: {str(e)}\nTrying pytube...")
+        try:
+            yt = YouTube(url)
+            stream = yt.streams.filter(only_audio=True).first()
+            filename = stream.download(output_path="downloads")
+        except Exception as e2:
+            await query.message.reply_text(f"❌ pytube also failed: {str(e2)}")
+            return
+
+    try:
         with open(filename, 'rb') as f:
             await query.message.reply_document(document=f)
-        await query.message.reply_text("✅ Download complete!")
+        await query.message.reply_text("✅ Audio download complete!")
         os.remove(filename)
     except Exception as e:
-        await query.message.reply_text(f"❌ Error: {str(e)}")
+        await query.message.reply_text(f"❌ File send error: {str(e)}")
 
+# Video download with fallback
 async def download_video(url, query, resolution):
-    ydl_opts = {
-        'format': f'bestvideo[height<={resolution}]+bestaudio/best',
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
-        'merge_output_format': 'mp4'
-    }
+    filename = None
     try:
+        ydl_opts = {
+            'format': f'bestvideo[height<={resolution}]+bestaudio/best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'merge_output_format': 'mp4'
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+    except Exception as e:
+        await query.message.reply_text(f"⚠️ yt_dlp failed: {str(e)}\nTrying pytube...")
+        try:
+            yt = YouTube(url)
+            stream = yt.streams.filter(progressive=True, file_extension='mp4', resolution=f"{resolution}p").first()
+            if not stream:
+                stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+            filename = stream.download(output_path="downloads")
+        except Exception as e2:
+            await query.message.reply_text(f"❌ pytube also failed: {str(e2)}")
+            return
+
+    try:
         with open(filename, 'rb') as f:
             await query.message.reply_document(document=f)
-        await query.message.reply_text("✅ Download complete!")
+        await query.message.reply_text("✅ Video download complete!")
         os.remove(filename)
     except Exception as e:
-        await query.message.reply_text(f"❌ Error: {str(e)}")
+        await query.message.reply_text(f"❌ File send error: {str(e)}")
 
-# Add handlers
+# Telegram handlers
 telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
 telegram_app.add_handler(CallbackQueryHandler(handle_choice))
 
-# Webhook route (fixed to /webhook)
+# Webhook route
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
