@@ -3,7 +3,7 @@ services:
     name: telegram-bot
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: bash start.sh
+    startCommand: "gunicorn bot:app"
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         value: 8119884133:AAEa82LpN3FaRj0HpAg1YPhoWpWYJ-XBeqA
