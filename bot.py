@@ -81,7 +81,7 @@ async def download_video(url, query, resolution):
 
 # ✅ Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://yourdomain.com/bot
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
@@ -93,24 +93,7 @@ app.run_webhook(
     listen="0.0.0.0",
     port=8000,
     webhook_url=WEBHOOK_URL
-        )    if not filename or not os.path.exists(filename):
-        await query.message.reply_text("❌ Download failed. No file found.")
-        return
-
-    with open(filename, 'rb') as f:
-        await query.message.reply_document(document=f)
-    await query.message.reply_text("✅ Audio download complete!")
-    os.remove(filename)
-
-# Video download with fallback
-async def download_video(url, query, resolution):
-    filename = None
-    try:
-        ydl_opts = {
-            'format': f'bestvideo[height<={resolution}]+bestaudio/best',
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'merge_output_format': 'mp4'
-        }
+)        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
