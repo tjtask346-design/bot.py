@@ -28,7 +28,7 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if choice == 'audio':
         await query.edit_message_text("⏳ Downloading audio...")
-        await download_audio(user_links[user_id], query)
+        await download_audio(user_links.get(user_id), query)
     elif choice == 'video':
         keyboard = [
             [InlineKeyboardButton("360p", callback_data='360')],
@@ -40,9 +40,13 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Choose resolution:", reply_markup=reply_markup)
     elif choice in ['360', '480', '720', '1080']:
         await query.edit_message_text(f"⏳ Downloading video in {choice}p...")
-        await download_video(user_links[user_id], query, choice)
+        await download_video(user_links.get(user_id), query, choice)
 
 async def download_audio(url, query):
+    if not url:
+        await query.message.reply_text("❌ No link found. Please send a video link first.")
+        return
+
     os.makedirs("downloads", exist_ok=True)
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -63,6 +67,10 @@ async def download_audio(url, query):
         await query.message.reply_text(f"❌ Failed to download audio: {e}")
 
 async def download_video(url, query, resolution):
+    if not url:
+        await query.message.reply_text("❌ No link found. Please send a video link first.")
+        return
+
     os.makedirs("downloads", exist_ok=True)
     ydl_opts = {
         'format': f'bestvideo[height<={resolution}]+bestaudio/best',
@@ -88,57 +96,9 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
 app.add_handler(CallbackQueryHandler(handle_choice))
 
-# ✅ Run webhook on port 8000
+# ✅ Run webhook for cloud deployment
 app.run_webhook(
     listen="0.0.0.0",
     port=8000,
     webhook_url=WEBHOOK_URL
-)        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-    except Exception as e:
-        await query.message.reply_text(f"⚠️ yt_dlp failed: {str(e)}\nTrying pytube...")
-        try:
-            if "youtube.com" in url or "youtu.be" in url:
-                yt = YouTube(url)
-                stream = yt.streams.filter(progressive=True, file_extension='mp4', resolution=f"{resolution}p").first()
-                if not stream:
-                    stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-                filename = stream.download(output_path="downloads")
-            else:
-                await query.message.reply_text("❌ Fallback only works for YouTube links.")
-                return
-        except Exception as e2:
-            await query.message.reply_text(f"❌ pytube also failed: {str(e2)}")
-            return
-
-    if not filename or not os.path.exists(filename):
-        await query.message.reply_text("❌ Download failed. No file found.")
-        return
-
-    with open(filename, 'rb') as f:
-        await query.message.reply_document(document=f)
-    await query.message.reply_text("✅ Video download complete!")
-    os.remove(filename)
-
-# Telegram handlers
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
-telegram_app.add_handler(CallbackQueryHandler(handle_choice))
-
-# Webhook route
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    telegram_app.process_update(update)
-    return "ok"
-
-@app.route("/")
-def index():
-    return "Bot is running!"
-
-# Start server
-if __name__ == "__main__":
-    telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
-    app.run(host="0.0.0.0", port=PORT)
+    )
