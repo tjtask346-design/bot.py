@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="En">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AiM Space - Crypto Wallet</title> 
+  <meta name="theme-color" content="#22d3ee" />
+  <meta name="description" content="P2P Wallet Application" /> 
+  <link rel="manifest" href="/manifest.json">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+
+  <style>
+    body { 
+        font-family: 'Poppins', sans-serif; 
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #e2e8f0;
+        min-height: 100vh;
+    }
+    
+    .glass-card { 
+        background: rgba(30, 41, 59, 0.6); 
+        backdrop-filter: blur(12px); 
+        -webkit-backdrop-filter: blur(12px); 
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+        border-radius: 1.5rem; 
+    }
+    
+    .input-field { 
+        background-color: #1e293b; 
+        border: 1px solid #334155; 
+        border-radius: 0.75rem; 
+        padding: 0.75rem 1rem; 
+        color: white; 
+        transition: all 0.3s ease; 
+    }
+    
+    .input-field:focus { 
+        outline: none; 
+        border-color: #22d3ee;
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
+    }
+    
+    .btn-primary { 
+        background: linear-gradient(90deg, #22d3ee, #06b6d4); 
+        border-radius: 0.75rem; 
+        padding: 0.8rem 1.5rem; 
+        font-weight: 600; 
+        color: #0f172a; 
+        transition: all 0.3s ease; 
+        box-shadow: 0 4px 20px rgba(34, 211, 238, 0.3); 
+        border: none;
+    }
+    
+    .btn-primary:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 6px 25px rgba(34, 211, 238, 0.4);
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <header class="fixed top-0 left-0 right-0 z-40 bg-slate-900/80 backdrop-blur-lg border-b border-slate-700/50">
+    <div class="container mx-auto px-4 py-3">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <!-- Your Logo -->
+          <img src="1000066307.jpg" alt="AiM Space Logo" class="w-10 h-10 rounded-xl object-cover">
+          <div>
+            <h1 class="text-xl font-bold text-white">AiM Space</h1>
+            <p class="text-xs text-slate-400">P2P Wallet</p>
+          </div>
+        </div>
+        
+        <button id="mobileMenuBtn" class="md:flex items-center gap-2 bg-slate-800/50 hover:bg-slate-700/50 px-4 py-2 rounded-lg transition-colors">
+          <i class="fas fa-bars text-cyan-400"></i>
+          <span class="text-sm text-white">Menu</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="pt-20 pb-6">
+    <!-- Auth Page -->
+    <main id="authPage" class="p-6 max-w-md mx-auto fade-in">
+      <div class="text-center mb-8">
+        <img src="1000066307.jpg" alt="AiM Space Logo" class="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover">
+        <h1 class="text-4xl font-bold text-white mb-2">AiM Space</h1>
+        <p class="text-slate-400">Your Secure P2P Wallet</p>
+      </div>
+      
+      <section id="loginSection">
+        <div class="glass-card p-6">
+          <h2 class="text-2xl font-bold text-white mb-6 text-center">Sign In</h2>
+          <form id="loginForm" class="space-y-4">
+            <div>
+              <label for="loginEmail" class="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+              <input type="email" id="loginEmail" class="w-full input-field" placeholder="Enter your email" required>
+            </div>
+            
+            <div>
+              <label for="loginPassword" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div class="relative">
+                <input type="password" id="loginPassword" class="w-full input-field pr-10" placeholder="Enter your password" required>
+                <button type="button" class="toggle-password absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-cyan-400 transition-colors">
+                  <ion-icon name="eye-outline"></ion-icon>
+                </button>
+              </div>
+            </div>
+            
+            <button type="submit" class="w-full btn-primary mt-2">Sign In</button>
+          </form>
+          
+          <div class="mt-6 text-center">
+            <p class="text-slate-400">Don't have an account? 
+              <a href="#" id="showSignUpBtn" class="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Sign Up</a>
+            </p>
+          </div>
+        </div>
+      </section>
+      
+      <section id="signUpSection" class="hidden">
+        <div class="glass-card p-6">
+          <h2 class="text-2xl font-bold text-white mb-6 text-center">Create Account</h2>
+          <form id="signUpForm" class="space-y-4">
+            <div>
+              <label for="suEmail" class="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+              <input type="email" id="suEmail" class="w-full input-field" placeholder="Enter your email" required>
+            </div>
+            
+            <div>
+              <label for="suPassword" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div class="relative">
+                <input type="password" id="suPassword" class="w-full input-field pr-10" placeholder="Create a password" required minlength="6">
+                <button type="button" class="toggle-password absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-cyan-400 transition-colors">
+                  <ion-icon name="eye-outline"></ion-icon>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label for="suPhone" class="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+              <input type="tel" id="suPhone" class="w-full input-field" placeholder="Enter your phone number" required>
+            </div>
+            
+            <div>
+              <label for="suReferral" class="block text-sm font-medium text-slate-300 mb-2">Referral Code (Optional)</label>
+              <input type="text" id="suReferral" class="w-full input-field" placeholder="Enter referral code if any">
+            </div>
+            
+            <button type="submit" class="w-full btn-primary mt-2">Create Account</button>
+          </form>
+          
+          <div class="mt-6 text-center">
+            <p class="text-slate-400">Already have an account? 
+              <a href="#" id="showLoginBtn" class="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Sign In</a>
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Dashboard Page -->
+    <main id="dashboardPage" class="hidden p-6 max-w-md mx-auto fade-in">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-white mb-1">Dashboard</h2>
+        <p class="text-slate-400">Welcome back!</p>
+      </div>
+      
+      <div class="glass-card p-5 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-slate-400">Total Balance</span>
+          <button class="text-cyan-400 hover:text-cyan-300 transition-colors">
+            <i class="fas fa-eye"></i>
+          </button>
+        </div>
+        <div class="text-3xl font-bold text-white mb-2" id="mainBalance">$0.00</div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-400">Today's Earnings: <span class="text-white" id="todaysEarning">$0.00</span></span>
+          <span class="text-slate-400">Referrals: <span class="text-white" id="todaysReferral">0</span></span>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <button id="mainSendBtn" class="glass-card p-4 flex flex-col items-center justify-center hover:bg-slate-700/50 transition-colors">
+          <div class="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center mb-2">
+            <i class="fas fa-paper-plane text-white"></i>
+          </div>
+          <span class="text-white font-medium">Send Money</span>
+        </button>
+        
+        <button id="mainReceiveBtn" class="glass-card p-4 flex flex-col items-center justify-center hover:bg-slate-700/50 transition-colors">
+          <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-2">
+            <i class="fas fa-download text-white"></i>
+          </div>
+          <span class="text-white font-medium">Receive Money</span>
+        </button>
+      </div>
+
+      <!-- Transaction History Section -->
+      <div class="glass-card p-5 mb-6">
+        <h3 class="text-lg font-bold text-white mb-4">Transaction History</h3>
+        <div id="transactionHistory" class="space-y-3">
+          <div class="text-center py-8">
+            <i class="fas fa-exchange-alt text-slate-600 text-3xl mb-2"></i>
+            <p class="text-slate-400">No transactions yet</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="glass-card p-5">
+        <h3 class="text-lg font-bold text-white mb-4">Quick Stats</h3>
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Total Earnings</span>
+            <span class="text-white font-medium" id="totalEarning">$0.00</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Total Referrals</span>
+            <span class="text-white font-medium" id="totalReferral">0</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Send Money Page -->
+    <main id="depositPage" class="hidden p-6 max-w-md mx-auto fade-in">
+      <div class="flex items-center gap-3 mb-6">
+        <button data-page="dashboardPage" class="p-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors">
+          <i class="fas fa-arrow-left text-white"></i>
+        </button>
+        <div>
+          <h2 class="text-2xl font-bold text-white">Send Money</h2>
+          <p class="text-slate-400">Transfer funds to another user</p>
+        </div>
+      </div>
+      
+      <div class="glass-card p-5">
+        <form id="sendMoneyForm" class="space-y-4">
+          <div>
+            <label for="recipientCode" class="block text-sm font-medium text-slate-300 mb-2">Recipient Wallet Code</label>
+            <input type="text" id="recipientCode" class="w-full input-field uppercase" placeholder="Enter recipient's 8-digit code" maxlength="8" required>
+          </div>
+          
+          <div>
+            <label for="sendAmount" class="block text-sm font-medium text-slate-300 mb-2">Amount (USD)</label>
+            <input type="number" id="sendAmount" class="w-full input-field" placeholder="0.00" min="0.01" step="0.01" required>
+          </div>
+          
+          <div>
+            <label for="walletPassword" class="block text-sm font-medium text-slate-300 mb-2">Wallet Password (6-digit PIN)</label>
+            <input type="password" id="walletPassword" class="w-full input-field" placeholder="Enter your 6-digit PIN" maxlength="6" pattern="\d{6}" required>
+          </div>
+          
+          <button type="submit" class="w-full btn-primary mt-2">Send Money</button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Receive Money Page -->
+    <main id="withdrawPage" class="hidden p-6 max-w-md mx-auto fade-in">
+      <div class="flex items-center gap-3 mb-6">
+        <button data-page="dashboardPage" class="p-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors">
+          <i class="fas fa-arrow-left text-white"></i>
+        </button>
+        <div>
+          <h2 class="text-2xl font-bold text-white">Receive Money</h2>
+          <p class="text-slate-400">Share your wallet code to receive funds</p>
+        </div>
+      </div>
+      
+      <div class="glass-card p-5">
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-qrcode text-white text-xl"></i>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Your Wallet Code</h3>
+          <p class="text-slate-400 mb-4">Share this code with others to receive money</p>
+          
+          <div class="bg-slate-800 p-4 rounded-lg mb-4">
+            <p id="receiveCodeDisplay" class="text-2xl font-bold text-white tracking-wider font-mono">LOADING</p>
+          </div>
+          
+          <button id="copyReceiveCodeBtn" class="copy-btn w-full btn-primary" data-copytext="">Copy Code</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Menu Page -->
+    <main id="menuPage" class="hidden p-6 max-w-md mx-auto fade-in">
+      <div class="flex items-center gap-3 mb-6">
+        <button data-page="dashboardPage" class="p-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors">
+          <i class="fas fa-arrow-left text-white"></i>
+        </button>
+        <div>
+          <h2 class="text-2xl font-bold text-white">Menu</h2>
+          <p class="text-slate-400">Manage your account and settings</p>
+        </div>
+      </div>
+      
+      <div class="glass-card p-5">
+        <div class="space-y-4">
+          <button data-page="dashboardPage" class="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
+            <div class="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-home text-white"></i>
+            </div>
+            <div>
+              <span class="text-white font-medium block">Dashboard</span>
+              <span class="text-slate-400 text-sm">Back to main screen</span>
+            </div>
+          </button>
+          
+          <button data-page="depositPage" class="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
+            <div class="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-paper-plane text-white"></i>
+            </div>
+            <div>
+              <span class="text-white font-medium block">Send Money</span>
+              <span class="text-slate-400 text-sm">Transfer to other users</span>
+            </div>
+          </button>
+          
+          <button data-page="withdrawPage" class="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
+            <div class="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-download text-white"></i>
+            </div>
+            <div>
+              <span class="text-white font-medium block">Receive Money</span>
+              <span class="text-slate-400 text-sm">Get your wallet code</span>
+            </div>
+          </button>
+          
+          <button id="referralBtn" class="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
+            <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-users text-white"></i>
+            </div>
+            <div>
+              <span class="text-white font-medium block">Referral Program</span>
+              <span class="text-slate-400 text-sm">Earn with friends</span>
+            </div>
+          </button>
+          
+          <button id="logoutBtn" class="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
+            <div class="w-10 h-10 bg-gradient-to-r from-red-500 to-pink-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-sign-out-alt text-white"></i>
+            </div>
+            <div>
+              <span class="text-white font-medium block">Logout</span>
+              <span class="text-slate-400 text-sm">Sign out of your account</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="alertModal" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-sm w-full mx-4 glass-card">
+        <div class="text-center">
+          <div id="alertIcon" class="fas fa-info-circle text-cyan-400 text-4xl mb-4"></div>
+          <h3 id="alertTitle" class="text-xl font-bold text-white mb-2">Alert Title</h3>
+          <p id="alertMsg" class="text-slate-400 mb-6">Alert message goes here.</p>
+          <button class="close-modal w-full btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="referralModal" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-sm w-full mx-4 glass-card">
+        <div class="text-center">
+          <div class="fas fa-users text-purple-400 text-4xl mb-4"></div>
+          <h3 class="text-xl font-bold text-white mb-2">Referral Program</h3>
+          <p class="text-slate-400 mb-4">Share your code and earn $6 for each friend!</p>
+          
+          <div class="bg-slate-700 p-4 rounded-lg mb-4">
+            <p class="text-sm text-slate-400 mb-1">Your Referral Code</p>
+            <p id="referralCodeDisplay" class="text-xl font-bold text-white tracking-wider">LOADING</p>
+          </div>
+          
+          <button class="copy-btn w-full btn-primary mb-3" data-copytext="">Copy Referral Code</button>
+          <button class="close-modal w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBy5YU4rVzkaM4wPZAwfSdE1gK00vRbHvQ",
+      authDomain: "testscmweb1.firebaseapp.com",
+      databaseURL: "https://testscmweb1-default-rtdb.firebaseio.com",
+      projectId: "testscmweb1",
+      storageBucket: "testscmweb1.firebasestorage.app",
+      messagingSenderId: "921389692757",
+      appId: "1:921389692757:web:d60bcb7c9419ce1c5fe1dc"
+    };
+
+    // Firebase Imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      onAuthStateChanged,
+      signOut,
+      setPersistence,
+      browserLocalPersistence,
+      sendEmailVerification
+    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      collection,
+      query,
+      where,
+      getDocs,
+      serverTimestamp,
+      onSnapshot,
+      runTransaction,
+      addDoc,
+      limit,
+      orderBy,
+      getDoc,
+      updateDoc
+    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    setPersistence(auth, browserLocalPersistence);
+
+    // Constants
+    const REFERRAL_BONUS = 6;
+
+    // UI Elements
+    const pages = {
+        authPage: document.getElementById("authPage"),
+        dashboardPage: document.getElementById("dashboardPage"),
+        depositPage: document.getElementById("depositPage"),
+        withdrawPage: document.getElementById("withdrawPage"),
+        menuPage: document.getElementById("menuPage")
+    };
+
+    const modals = {
+        alertModal: document.getElementById("alertModal"),
+        referralModal: document.getElementById("referralModal")
+    };
+
+    // Global Variables
+    let currentUser = null, currentUserData = null;
+
+    // Utility Functions
+    function showAlert(title, message, type = 'info') {
+        const alertModal = document.getElementById("alertModal");
+        document.getElementById("alertTitle").textContent = title;
+        document.getElementById("alertMsg").textContent = message;
+        
+        const alertIcon = document.getElementById("alertIcon");
+        if (type === 'success') {
+            alertIcon.className = 'fas fa-check-circle text-green-400 text-4xl mb-4';
+        } else if (type === 'error') {
+            alertIcon.className = 'fas fa-exclamation-circle text-red-400 text-4xl mb-4';
+        } else {
+            alertIcon.className = 'fas fa-info-circle text-cyan-400 text-4xl mb-4';
+        }
+        
+        modals.alertModal.classList.remove("hidden");
+    }
+
+    function goto(pageName) {
+        Object.values(pages).forEach(p => p.classList.add("hidden"));
+        if (pages[pageName]) pages[pageName].classList.remove("hidden");
+    }
+
+    function formatUSD(num) {
+        const value = Number(num || 0);
+        return `$${value.toFixed(2)}`;
+    }
+
+    function validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
+    // Generate 8-digit code from phone number
+    function generateWalletCode(phone) {
+        // Simple hash function to generate consistent 8-digit code from phone
+        let hash = 0;
+        for (let i = 0; i < phone.length; i++) {
+            hash = ((hash << 5) - hash) + phone.charCodeAt(i);
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString().substring(0, 8).padStart(8, '0');
+    }
+
+    async function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            showAlert('Success', 'Copied to clipboard!', 'success');
+        }
+    }
+
+    // Update Transaction History
+    function updateTransactionHistory(transactions) {
+        const container = document.getElementById('transactionHistory');
+        if (!transactions || transactions.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-exchange-alt text-slate-600 text-3xl mb-2"></i>
+                    <p class="text-slate-400">No transactions yet</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = transactions.map(transaction => `
+            <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full ${transaction.type === 'send' ? 'bg-red-500/20' : 'bg-green-500/20'} flex items-center justify-center">
+                        <i class="fas ${transaction.type === 'send' ? 'fa-arrow-up text-red-400' : 'fa-arrow-down text-green-400'}"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-medium">${transaction.type === 'send' ? 'Sent' : 'Received'}</p>
+                        <p class="text-slate-400 text-sm">${transaction.date}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-white font-medium">${transaction.amount}</p>
+                    <p class="text-slate-400 text-sm">${transaction.status}</p>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Authentication Logic
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('mobileMenuBtn').classList.remove('hidden');
+        
+        // Listen to user data changes
+        onSnapshot(doc(db, "users", user.uid), (snap) => {
+          if (!snap.exists()) return;
+          
+          currentUserData = snap.data();
+          updateDashboardUI(currentUserData);
+          
+          if(!pages.authPage.classList.contains('hidden')) {
+              goto("dashboardPage");
+          }
+        });
+      } else {
+        currentUser = null;
+        currentUserData = null;
+        goto("authPage");
+        document.getElementById('mobileMenuBtn').classList.add('hidden');
+      }
+    });
+
+    // UI Update Functions
+    function updateDashboardUI(data){
+        document.getElementById("mainBalance").textContent = formatUSD(data.balance);
+        document.getElementById("totalEarning").textContent = formatUSD(data.totalEarning);
+        document.getElementById("totalReferral").textContent = data.totalReferral || 0;
+        document.getElementById("todaysReferral").textContent = data.todaysReferral || 0;
+        document.getElementById("todaysEarning").textContent = formatUSD(data.todaysEarning);
+        
+        // Update transaction history
+        if (data.transactions) {
+            updateTransactionHistory(data.transactions);
+        }
+    }
+
+    // Password Toggle
+    document.querySelectorAll('.toggle-password').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = btn.previousElementSibling;
+            const icon = btn.querySelector('ion-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('name', 'eye-off-outline');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('name', 'eye-outline');
+            }
+        });
+    });
+
+    // Auth Forms Logic
+    document.getElementById('showSignUpBtn').addEventListener('click', (e) => { 
+        e.preventDefault(); 
+        document.getElementById('loginSection').classList.add('hidden'); 
+        document.getElementById('signUpSection').classList.remove('hidden'); 
+    });
+    
+    document.getElementById('showLoginBtn').addEventListener('click', (e) => { 
+        e.preventDefault(); 
+        document.getElementById('signUpSection').classList.add('hidden'); 
+        document.getElementById('loginSection').classList.remove('hidden'); 
+    });
+    
+    document.getElementById("signUpForm").addEventListener("submit", async (e) => { 
+        e.preventDefault(); 
+        const email = document.getElementById("suEmail").value;
+        const password = document.getElementById("suPassword").value;
+        const phone = document.getElementById("suPhone").value;
+        const referralCode = document.getElementById("suReferral").value.trim();
+        
+        if (!validateEmail(email)) {
+            return showAlert('Invalid Email', 'Please enter a valid email address.', 'error');
+        }
+        
+        if (password.length < 6) {
+            return showAlert('Weak Password', 'Password should be at least 6 characters long.', 'warning');
+        }
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Generate wallet code from phone number
+            const walletCode = generateWalletCode(phone);
+
+            const newUserRef = doc(db, "users", user.uid);
+            await runTransaction(db, async (transaction) => {
+                transaction.set(newUserRef, {
+                    email: user.email,
+                    phone: phone,
+                    status: "approved",
+                    balance: 0,
+                    totalEarning: 0,
+                    totalReferral: 0,
+                    todaysReferral: 0,
+                    todaysEarning: 0,
+                    referralCode: walletCode,
+                    walletPassword: null,
+                    transactions: [],
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    profile: {
+                        name: '',
+                        phone: phone
+                    }
+                });
+
+                if (referralCode) {
+                    const q = query(collection(db, "users"), where("referralCode", "==", referralCode), limit(1));
+                    const referrerSnap = await getDocs(q);
+                    if (!referrerSnap.empty) {
+                        const referrerDoc = referrerSnap.docs[0];
+                        const referrerRef = referrerDoc.ref;
+                        const referrerData = referrerDoc.data();
+
+                        transaction.update(referrerRef, {
+                            balance: referrerData.balance + REFERRAL_BONUS,
+                            totalReferral: (referrerData.totalReferral || 0) + 1,
+                            todaysReferral: (referrerData.todaysReferral || 0) + 1
+                        });
+                    }
+                }
+            });
+
+            showAlert('Success', 'Account created successfully!', 'success');
+        } catch (error) {
+            showAlert("Signup Failed", error.message, "error");
+        }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+        
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch(error) {
+            let errorMessage = error.message;
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                errorMessage = "E-mail or Password incorrect.";
+            }
+            showAlert("Login Failed", errorMessage, "error");
+        }
+    });
+
+    // Send Money Logic
+    document.getElementById('sendMoneyForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const recipientCode = document.getElementById('recipientCode').value.trim().toUpperCase();
+        const amount = parseFloat(document.getElementById('sendAmount').value);
+        const walletPassword = document.getElementById('walletPassword').value;
+
+        // Validation
+        if (!recipientCode || !amount || !walletPassword) {
+            return showAlert('Error', 'Please fill all fields.', 'error');
+        }
+
+        if (isNaN(amount) || amount <= 0) {
+            return showAlert('Error', 'Please enter a valid amount.', 'error');
+        }
+
+        if (currentUserData.balance < amount) {
+            return showAlert('Insufficient Balance', 'You do not have enough funds.', 'error');
+        }
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                // Find recipient
+                const recipientQuery = query(collection(db, "users"), where("referralCode", "==", recipientCode), limit(1));
+                const recipientSnap = await getDocs(recipientQuery);
+                if (recipientSnap.empty) {
+                    throw new Error("Recipient wallet code not found.");
+                }
+                const recipientDoc = recipientSnap.docs[0];
+                const recipientRef = recipientDoc.ref;
+
+                // Get sender
+                const senderRef = doc(db, "users", currentUser.uid);
+                const senderDoc = await transaction.get(senderRef);
+
+                if (!senderDoc.exists()) throw new Error("Sender not found.");
+
+                // Update balances
+                const senderData = senderDoc.data();
+                const recipientData = recipientDoc.data();
+
+                transaction.update(senderRef, {
+                    balance: senderData.balance - amount
+                });
+
+                transaction.update(recipientRef, {
+                    balance: recipientData.balance + amount
+                });
+
+                // Add transaction to history
+                const newTransaction = {
+                    type: 'send',
+                    amount: formatUSD(amount),
+                    to: recipientCode,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Completed'
+                };
+
+                transaction.update(senderRef, {
+                    transactions: [...(senderData.transactions || []), newTransaction]
+                });
+
+                const recipientTransaction = {
+                    type: 'receive',
+                    amount: formatUSD(amount),
+                    from: currentUserData.referralCode,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Received'
+                };
+
+                transaction.update(recipientRef, {
+                    transactions: [...(recipientData.transactions || []), recipientTransaction]
+                });
+            });
+
+            showAlert('Success', `Successfully sent ${formatUSD(amount)} to ${recipientCode}!`, 'success');
+            document.getElementById('sendMoneyForm').reset();
+        } catch (error) {
+            showAlert('Transfer Failed', error.message, 'error');
+        }
+    });
+
+    // Setup Receive Money Page
+    function setupWithdrawPage() {
+        if (currentUserData && currentUserData.referralCode) {
+            const userCode = currentUserData.referralCode;
+            document.getElementById('receiveCodeDisplay').textContent = userCode;
+            const copyBtn = document.getElementById('copyReceiveCodeBtn');
+            copyBtn.dataset.copytext = userCode;
+        }
+    }
+
+    // Navigation
+    document.querySelectorAll('[data-page]').forEach(button => {
+        button.addEventListener('click', () => {
+            const page = button.dataset.page;
+            goto(page);
+            
+            if (page === 'withdrawPage' && currentUserData) {
+                setupWithdrawPage();
+            }
+        });
+    });
+
+    // Mobile Menu
+    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+        goto('menuPage');
+    });
+
+    // Close modals
+    document.querySelectorAll(".close-modal").forEach(btn => {
+        btn.addEventListener("click", () => {
+            btn.closest(".modal-container").classList.add("hidden");
+        });
+    });
+
+    // Copy buttons
+    document.addEventListener('click', (e) => {
+        const copyBtn = e.target.closest('.copy-btn');
+        if(copyBtn) {
+            const textToCopy = copyBtn.dataset.copytext;
+            if (textToCopy) {
+                copyToClipboard(textToCopy);
+            }
+        }
+    });
+
+    // Menu Actions
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        signOut(auth);
+    });
+    
+    document.getElementById('referralBtn').addEventListener('click', () => {
+        if (currentUserData && currentUserData.referralCode) {
+            const code = currentUserData.referralCode;
+            document.getElementById('referralCodeDisplay').textContent = code;
+            const copyBtn = document.querySelector('#referralModal .copy-btn');
+            copyBtn.dataset.copytext = code;
+            modals.referralModal.classList.remove('hidden');
+        }
+    });
+    
+    // Dashboard buttons
+    document.getElementById('mainSendBtn').addEventListener('click', () => {
+        goto('depositPage');
+    });
+    
+    document.getElementById('mainReceiveBtn').addEventListener('click', () => {
+        goto('withdrawPage');
+        setupWithdrawPage();
+    });
+
+    // Handle referral parameter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+        document.getElementById('suReferral').value = refCode;
+    }
+
+  </script>
+</body>
+</html>
