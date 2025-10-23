@@ -297,7 +297,14 @@
         </div>
       </div>
       
-      <div class="glass-card p-5">
+      <!-- Mode Switcher for Send Page -->
+      <div class="flex gap-2 mb-6 p-1 bg-slate-800/50 rounded-lg">
+        <button id="inAppSendModeBtn" class="mode-btn active">In App</button>
+        <button id="withdrawModeBtn" class="mode-btn">Withdraw</button>
+      </div>
+      
+      <!-- In App Transfer Mode -->
+      <div id="inAppSendMode" class="glass-card p-5">
         <form id="sendMoneyForm" class="space-y-4">
           <div>
             <label for="recipientCode" class="block text-sm font-medium text-slate-300 mb-2">Recipient Wallet Code</label>
@@ -317,6 +324,43 @@
           <button type="submit" class="w-full btn-primary mt-2">Send Money</button>
         </form>
       </div>
+
+      <!-- Withdraw Mode -->
+      <div id="withdrawMode" class="glass-card p-5 hidden">
+        <form id="withdrawForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Currency</label>
+            <input type="text" value="USDT" class="w-full input-field bg-slate-700 cursor-not-allowed" readonly>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Choose Network</label>
+            <div class="relative">
+              <input type="text" id="withdrawNetworkDisplay" class="w-full input-field bg-slate-700 cursor-pointer" placeholder="Select Network" readonly>
+              <button type="button" id="withdrawNetworkSelectBtn" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-cyan-400 transition-colors">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label for="withdrawAmount" class="block text-sm font-medium text-slate-300 mb-2">Amount (USDT)</label>
+            <input type="number" id="withdrawAmount" class="w-full input-field" placeholder="0.00" min="0.01" step="0.01" required>
+          </div>
+          
+          <div>
+            <label for="withdrawAddress" class="block text-sm font-medium text-slate-300 mb-2">Your USDT (BEP-20) Address</label>
+            <input type="text" id="withdrawAddress" class="w-full input-field" placeholder="Enter your USDT BEP-20 wallet address" required>
+          </div>
+          
+          <div>
+            <label for="withdrawPassword" class="block text-sm font-medium text-slate-300 mb-2">Wallet Password (6-digit PIN)</label>
+            <input type="password" id="withdrawPassword" class="w-full input-field" placeholder="Enter your 6-digit PIN" maxlength="6" pattern="\d{6}" required>
+          </div>
+          
+          <button type="submit" class="w-full btn-primary mt-2">Submit Withdraw Request</button>
+        </form>
+      </div>
     </main>
 
     <!-- Receive Money Page -->
@@ -334,7 +378,7 @@
       <!-- Mode Switcher -->
       <div class="flex gap-2 mb-6 p-1 bg-slate-800/50 rounded-lg">
         <button id="inAppModeBtn" class="mode-btn active">In App</button>
-        <button id="p2pModeBtn" class="mode-btn">P2P</button>
+        <button id="depositsModeBtn" class="mode-btn">Deposits</button>
       </div>
       
       <!-- In App Mode -->
@@ -354,8 +398,8 @@
         </div>
       </div>
 
-      <!-- P2P Mode -->
-      <div id="p2pMode" class="glass-card p-5 hidden">
+      <!-- Deposits Mode -->
+      <div id="depositsMode" class="glass-card p-5 hidden">
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Currency</label>
@@ -370,6 +414,11 @@
                 <i class="fas fa-chevron-down"></i>
               </button>
             </div>
+          </div>
+          
+          <div>
+            <label for="depositAmount" class="block text-sm font-medium text-slate-300 mb-2">Amount (USDT)</label>
+            <input type="number" id="depositAmount" class="w-full input-field" placeholder="0.00" min="0.01" step="0.01" required>
           </div>
           
           <div>
@@ -556,6 +605,19 @@
       </div>
     </div>
 
+    <!-- Withdraw Confirmation Modal -->
+    <div id="withdrawConfirmModal" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-sm w-full mx-4 glass-card">
+        <div class="text-center">
+          <div class="fas fa-check-circle text-green-400 text-4xl mb-4"></div>
+          <h3 class="text-xl font-bold text-white mb-2">Withdraw Request Submitted</h3>
+          <p class="text-slate-400 mb-4">Your withdrawal request has been submitted for admin approval. You will be notified once processed.</p>
+          
+          <button class="close-modal w-full btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Network Selection Modal -->
     <div id="networkModal" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div class="network-modal rounded-2xl p-6 max-w-sm w-full mx-4">
@@ -698,13 +760,16 @@
         referralModal: document.getElementById("referralModal"),
         passwordModal: document.getElementById("passwordModal"),
         depositConfirmModal: document.getElementById("depositConfirmModal"),
+        withdrawConfirmModal: document.getElementById("withdrawConfirmModal"),
         networkModal: document.getElementById("networkModal"),
         supportModal: document.getElementById("supportModal")
     };
 
     // Global Variables
     let currentUser = null, currentUserData = null;
-    let selectedNetwork = 'BEP-20'; // Default network
+    let selectedNetwork = 'BEP-20'; // Default network for deposits
+    let selectedWithdrawNetwork = 'BEP-20'; // Default network for withdraw
+    let currentNetworkSelection = 'deposit'; // 'deposit' or 'withdraw'
 
     // Utility Functions
     function showAlert(title, message, type = 'info') {
@@ -731,6 +796,12 @@
         // Update receive page when navigated to
         if (pageName === 'withdrawPage' && currentUserData) {
             updateReceivePage();
+        }
+        
+        // Update network displays
+        if (pageName === 'withdrawPage' || pageName === 'depositPage') {
+            updateP2PWalletAddress();
+            document.getElementById('withdrawNetworkDisplay').value = selectedWithdrawNetwork;
         }
     }
 
@@ -827,42 +898,76 @@
     }
 
     // Mode switcher for Receive page
-    function setupModeSwitcher() {
+    function setupReceiveModeSwitcher() {
         const inAppModeBtn = document.getElementById('inAppModeBtn');
-        const p2pModeBtn = document.getElementById('p2pModeBtn');
+        const depositsModeBtn = document.getElementById('depositsModeBtn');
         const inAppMode = document.getElementById('inAppMode');
-        const p2pMode = document.getElementById('p2pMode');
+        const depositsMode = document.getElementById('depositsMode');
 
         inAppModeBtn.addEventListener('click', () => {
             inAppModeBtn.classList.add('active');
-            p2pModeBtn.classList.remove('active');
+            depositsModeBtn.classList.remove('active');
             inAppMode.classList.remove('hidden');
-            p2pMode.classList.add('hidden');
+            depositsMode.classList.add('hidden');
         });
 
-        p2pModeBtn.addEventListener('click', () => {
-            p2pModeBtn.classList.add('active');
+        depositsModeBtn.addEventListener('click', () => {
+            depositsModeBtn.classList.add('active');
             inAppModeBtn.classList.remove('active');
-            p2pMode.classList.remove('hidden');
+            depositsMode.classList.remove('hidden');
             inAppMode.classList.add('hidden');
             updateP2PWalletAddress();
+        });
+    }
+
+    // Mode switcher for Send page
+    function setupSendModeSwitcher() {
+        const inAppSendModeBtn = document.getElementById('inAppSendModeBtn');
+        const withdrawModeBtn = document.getElementById('withdrawModeBtn');
+        const inAppSendMode = document.getElementById('inAppSendMode');
+        const withdrawMode = document.getElementById('withdrawMode');
+
+        inAppSendModeBtn.addEventListener('click', () => {
+            inAppSendModeBtn.classList.add('active');
+            withdrawModeBtn.classList.remove('active');
+            inAppSendMode.classList.remove('hidden');
+            withdrawMode.classList.add('hidden');
+        });
+
+        withdrawModeBtn.addEventListener('click', () => {
+            withdrawModeBtn.classList.add('active');
+            inAppSendModeBtn.classList.remove('active');
+            withdrawMode.classList.remove('hidden');
+            inAppSendMode.classList.add('hidden');
         });
     }
 
     // Network Selection Modal
     function setupNetworkModal() {
         const networkSelectBtn = document.getElementById('networkSelectBtn');
+        const withdrawNetworkSelectBtn = document.getElementById('withdrawNetworkSelectBtn');
         const networkModal = document.getElementById('networkModal');
         const networkOptions = document.querySelectorAll('.network-option');
 
         networkSelectBtn.addEventListener('click', () => {
+            currentNetworkSelection = 'deposit';
+            networkModal.classList.remove("hidden");
+        });
+
+        withdrawNetworkSelectBtn.addEventListener('click', () => {
+            currentNetworkSelection = 'withdraw';
             networkModal.classList.remove("hidden");
         });
 
         networkOptions.forEach(option => {
             option.addEventListener('click', () => {
-                selectedNetwork = option.dataset.network;
-                updateP2PWalletAddress();
+                if (currentNetworkSelection === 'withdraw') {
+                    selectedWithdrawNetwork = option.dataset.network;
+                    document.getElementById('withdrawNetworkDisplay').value = selectedWithdrawNetwork;
+                } else {
+                    selectedNetwork = option.dataset.network;
+                    updateP2PWalletAddress();
+                }
                 networkModal.classList.add("hidden");
             });
         });
@@ -1281,13 +1386,81 @@
         }
     });
 
-    // Confirm Deposit Button
+    // Withdraw Form Handler
+    document.getElementById("withdrawForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const amount = parseFloat(document.getElementById("withdrawAmount").value);
+        const walletAddress = document.getElementById("withdrawAddress").value;
+        const network = document.getElementById("withdrawNetworkDisplay").value;
+        const walletPassword = document.getElementById("withdrawPassword").value;
+        
+        if (!currentUserData) {
+            return showAlert('Error', 'User data not loaded. Please try again.', 'error');
+        }
+        
+        // Check if user has set transaction password
+        if (!currentUserData.transactionPassword) {
+            return showAlert('Transaction Password Required', 'Please set your transaction password first in the menu.', 'error');
+        }
+        
+        // Verify transaction password
+        if (walletPassword !== currentUserData.transactionPassword) {
+            return showAlert('Incorrect Password', 'Transaction password is incorrect.', 'error');
+        }
+        
+        if (amount <= 0) {
+            return showAlert('Invalid Amount', 'Please enter a valid amount.', 'error');
+        }
+        
+        if (amount > currentUserData.balance) {
+            return showAlert('Insufficient Balance', 'You do not have enough balance to complete this withdrawal.', 'error');
+        }
+        
+        if (!network) {
+            return showAlert('Network Required', 'Please select a network.', 'error');
+        }
+        
+        if (!walletAddress) {
+            return showAlert('Wallet Address Required', 'Please enter your USDT wallet address.', 'error');
+        }
+        
+        try {
+            // Create withdraw request
+            const withdrawRequest = {
+                userId: currentUser.uid,
+                userEmail: currentUserData.email,
+                amount: amount,
+                network: network,
+                walletAddress: walletAddress,
+                status: 'pending', // Admin will approve/reject
+                createdAt: serverTimestamp(),
+                type: 'withdraw'
+            };
+            
+            await addDoc(collection(db, "withdrawRequests"), withdrawRequest);
+            
+            modals.withdrawConfirmModal.classList.remove("hidden");
+            document.getElementById("withdrawForm").reset();
+            
+        } catch (error) {
+            console.error("Withdraw request error:", error);
+            showAlert('Withdraw Failed', 'Failed to submit withdrawal request. Please try again.', 'error');
+        }
+    });
+
+    // Confirm Deposit Button with amount
     document.getElementById('confirmDepositBtn').addEventListener('click', (e) => {
         e.preventDefault();
         const p2pHash = document.getElementById('p2pHash').value;
+        const depositAmount = parseFloat(document.getElementById('depositAmount').value);
         
         if (!p2pHash) {
             return showAlert('Error', 'Please enter transaction hash.', 'error');
+        }
+        
+        if (!depositAmount || depositAmount <= 0) {
+            return showAlert('Error', 'Please enter a valid amount.', 'error');
         }
         
         // Show deposit confirmation modal
@@ -1295,6 +1468,7 @@
         
         // Reset form
         document.getElementById('p2pHash').value = '';
+        document.getElementById('depositAmount').value = '';
     });
 
     // Copy Buttons
@@ -1338,11 +1512,13 @@
 
     // Initialize mode switcher and network selection
     document.addEventListener('DOMContentLoaded', () => {
-        setupModeSwitcher();
+        setupReceiveModeSwitcher();
+        setupSendModeSwitcher();
         setupNetworkModal();
         
         // Initialize P2P wallet address
         updateP2PWalletAddress();
+        document.getElementById('withdrawNetworkDisplay').value = selectedWithdrawNetwork;
     });
 
     // Initialize
